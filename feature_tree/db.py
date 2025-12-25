@@ -59,3 +59,50 @@ class FeatureDB:
 
     def close(self):
         self.conn.close()
+
+    def add_feature(
+        self,
+        id: str,
+        name: str,
+        parent_id: Optional[str] = None,
+        description: Optional[str] = None,
+        status: str = "planned"
+    ) -> dict:
+        now = datetime.utcnow().isoformat()
+        self.conn.execute(
+            """INSERT INTO features (id, parent_id, name, description, status, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (id, parent_id, name, description, status, now, now)
+        )
+        self.conn.commit()
+        return self.get_feature(id)
+
+    def get_feature(self, id: str) -> Optional[dict]:
+        row = self.conn.execute(
+            "SELECT * FROM features WHERE id = ?", (id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def update_feature(self, id: str, **fields) -> Optional[dict]:
+        if not fields:
+            return self.get_feature(id)
+
+        # Convert lists to JSON
+        for key in ["code_symbols", "files", "commit_ids"]:
+            if key in fields and isinstance(fields[key], list):
+                fields[key] = json.dumps(fields[key])
+
+        fields["updated_at"] = datetime.utcnow().isoformat()
+
+        set_clause = ", ".join(f"{k} = ?" for k in fields.keys())
+        values = list(fields.values()) + [id]
+
+        self.conn.execute(
+            f"UPDATE features SET {set_clause} WHERE id = ?",
+            values
+        )
+        self.conn.commit()
+        return self.get_feature(id)
+
+    def delete_feature(self, id: str) -> Optional[dict]:
+        return self.update_feature(id, status="deleted")
