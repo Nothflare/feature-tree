@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "feature-tree": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "feature_tree.mcp_server"]
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python feature_tree/session_hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}
