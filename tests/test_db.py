@@ -66,3 +66,21 @@ def test_delete_feature():
 
         assert deleted["status"] == "deleted"
         db.close()
+
+
+def test_search_features():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "features.db")
+        db = FeatureDB(db_path)
+
+        db.add_feature(id="auth-login", name="User Login", description="Login with email")
+        db.add_feature(id="auth-signup", name="User Signup", description="Register new users")
+        db.add_feature(id="payments", name="Payments", description="Stripe integration")
+
+        results = db.search_features("user")
+
+        assert len(results) == 2
+        ids = [r["id"] for r in results]
+        assert "auth-login" in ids
+        assert "auth-signup" in ids
+        db.close()

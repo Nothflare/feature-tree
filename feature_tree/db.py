@@ -106,3 +106,14 @@ class FeatureDB:
 
     def delete_feature(self, id: str) -> Optional[dict]:
         return self.update_feature(id, status="deleted")
+
+    def search_features(self, query: str) -> list[dict]:
+        # FTS5 search
+        rows = self.conn.execute(
+            """SELECT f.* FROM features f
+               JOIN features_fts fts ON f.id = fts.id
+               WHERE features_fts MATCH ? AND f.status != 'deleted'
+               ORDER BY rank""",
+            (query,)
+        ).fetchall()
+        return [dict(row) for row in rows]
