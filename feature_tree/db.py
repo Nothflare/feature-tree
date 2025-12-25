@@ -1,7 +1,7 @@
 # feature_tree/db.py
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 from pathlib import Path
 
@@ -68,7 +68,7 @@ class FeatureDB:
         description: Optional[str] = None,
         status: str = "planned"
     ) -> dict:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).isoformat()
         self.conn.execute(
             """INSERT INTO features (id, parent_id, name, description, status, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
@@ -92,7 +92,7 @@ class FeatureDB:
             if key in fields and isinstance(fields[key], list):
                 fields[key] = json.dumps(fields[key])
 
-        fields["updated_at"] = datetime.utcnow().isoformat()
+        fields["updated_at"] = datetime.now(UTC).isoformat()
 
         set_clause = ", ".join(f"{k} = ?" for k in fields.keys())
         values = list(fields.values()) + [id]
