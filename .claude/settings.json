@@ -2,7 +2,7 @@
   "mcpServers": {
     "feature-tree": {
       "command": "uv",
-      "args": ["run", "python", "-m", "feature_tree.mcp_server"]
+      "args": ["run", "feature-tree"]
     }
   },
   "hooks": {

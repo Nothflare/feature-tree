@@ -2,7 +2,18 @@
 name = "feature-tree"
 version = "0.1.0"
 description = "AI-driven feature management for Claude Code"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
+keywords = ["mcp", "claude", "ai", "feature-management", "documentation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
     "mcp>=1.0.0",
 ]
@@ -11,3 +22,10 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
 ]
+
+[project.scripts]
+feature-tree = "feature_tree.mcp_server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
