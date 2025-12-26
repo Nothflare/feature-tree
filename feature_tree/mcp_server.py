@@ -34,7 +34,7 @@ Single source of truth for what this project does. Human specifies, you execute.
 ## Status: planned → in-progress → done (or deleted)
 """
 
-# Project root is cwd (set by ${PROJECT_ROOT} in plugin.json)
+# Project root is cwd (set by "cwd": "." in plugin.json mcpServers config)
 PROJECT_ROOT: Path = Path.cwd()
 
 mcp = FastMCP(
