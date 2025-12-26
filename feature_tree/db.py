@@ -12,6 +12,7 @@ class FeatureDB:
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self._init_tables()
+        self._ensure_fts_valid()
 
     def _init_tables(self):
         self.conn.executescript("""
@@ -28,23 +29,63 @@ class FeatureDB:
                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
             );
-
-            -- Standalone FTS5 table (no content sync issues)
-            CREATE VIRTUAL TABLE IF NOT EXISTS features_fts USING fts5(
-                id, name, description, technical_notes
-            );
         """)
         self.conn.commit()
 
+    def _ensure_fts_valid(self):
+        """Ensure FTS table exists and is properly synced."""
+        # Drop old triggers that cause issues
+        for trigger in ['features_ai', 'features_ad', 'features_au']:
+            self.conn.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+
+        # Check if FTS table exists and is standalone (not content-based)
+        try:
+            result = self.conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='features_fts'"
+            ).fetchone()
+
+            if result:
+                sql = result[0] or ""
+                # If it's an old content-based FTS, drop and recreate
+                if "content=" in sql.lower():
+                    self.conn.execute("DROP TABLE features_fts")
+                    result = None
+
+            if not result:
+                # Create standalone FTS5 table
+                self.conn.execute("""
+                    CREATE VIRTUAL TABLE features_fts USING fts5(
+                        id, name, description, technical_notes
+                    )
+                """)
+
+            # Rebuild FTS index from features table
+            self._rebuild_fts()
+            self.conn.commit()
+
+        except sqlite3.OperationalError:
+            # Table doesn't exist, create it
+            self.conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS features_fts USING fts5(
+                    id, name, description, technical_notes
+                )
+            """)
+            self._rebuild_fts()
+            self.conn.commit()
+
+    def _rebuild_fts(self):
+        """Rebuild entire FTS index from features table."""
+        self.conn.execute("DELETE FROM features_fts")
+        self.conn.execute("""
+            INSERT INTO features_fts (id, name, description, technical_notes)
+            SELECT id, name, description, technical_notes FROM features
+        """)
+
     def _sync_fts(self, feature_id: str, delete_only: bool = False):
         """Sync a single feature to FTS index."""
-        # Delete old entry
-        self.conn.execute(
-            "DELETE FROM features_fts WHERE id = ?", (feature_id,)
-        )
+        self.conn.execute("DELETE FROM features_fts WHERE id = ?", (feature_id,))
 
         if not delete_only:
-            # Insert current data
             row = self.conn.execute(
                 "SELECT id, name, description, technical_notes FROM features WHERE id = ?",
                 (feature_id,)
@@ -89,7 +130,6 @@ class FeatureDB:
         if not fields:
             return self.get_feature(id)
 
-        # Convert lists to JSON
         for key in ["code_symbols", "files", "commit_ids"]:
             if key in fields and isinstance(fields[key], list):
                 fields[key] = json.dumps(fields[key])
@@ -111,9 +151,8 @@ class FeatureDB:
         return self.update_feature(id, status="deleted")
 
     def search_features(self, query: str) -> list[dict]:
-        """FTS5 search with fallback to LIKE for simple queries."""
+        """FTS5 search with fallback to LIKE."""
         try:
-            # Try FTS5 search
             rows = self.conn.execute(
                 """SELECT f.* FROM features f
                    JOIN features_fts fts ON f.id = fts.id
@@ -123,7 +162,6 @@ class FeatureDB:
             ).fetchall()
             return [dict(row) for row in rows]
         except sqlite3.OperationalError:
-            # Fallback to LIKE search
             like_query = f"%{query}%"
             rows = self.conn.execute(
                 """SELECT * FROM features
