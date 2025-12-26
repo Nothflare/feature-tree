@@ -11,10 +11,7 @@
   "mcpServers": {
     "feature-tree": {
       "command": "uv",
-      "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "feature-tree"],
-      "env": {
-        "PROJECT_ROOT": "${PWD}"
-      }
+      "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "feature-tree"]
     }
   }
 }

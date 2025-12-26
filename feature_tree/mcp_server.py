@@ -35,8 +35,8 @@ Single source of truth for what this project does. Human specifies, you execute.
 ## Status: planned → in-progress → done (or deleted)
 """
 
-# Project root from env var (set by plugin.json: "env": {"PROJECT_ROOT": "${PWD}"})
-PROJECT_ROOT: Path = Path(os.environ.get("PROJECT_ROOT", os.getcwd()))
+# Project root is inherited cwd (uv --directory only affects pyproject.toml lookup, not subprocess cwd)
+PROJECT_ROOT: Path = Path(os.getcwd())
 
 mcp = FastMCP(
     "feature-tree",
