@@ -3,6 +3,7 @@
 """Feature Tree MCP Server"""
 
 import json
+import os
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -34,8 +35,8 @@ Single source of truth for what this project does. Human specifies, you execute.
 ## Status: planned → in-progress → done (or deleted)
 """
 
-# Project root is cwd (set by "cwd": "." in plugin.json mcpServers config)
-PROJECT_ROOT: Path = Path.cwd()
+# Project root from env var (set by plugin.json: "env": {"PROJECT_ROOT": "${PWD}"})
+PROJECT_ROOT: Path = Path(os.environ.get("PROJECT_ROOT", os.getcwd()))
 
 mcp = FastMCP(
     "feature-tree",

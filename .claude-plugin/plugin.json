@@ -12,7 +12,9 @@
     "feature-tree": {
       "command": "uv",
       "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "feature-tree"],
-      "cwd": "."
+      "env": {
+        "PROJECT_ROOT": "${PWD}"
+      }
     }
   }
 }
