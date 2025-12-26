@@ -10,7 +10,8 @@
   "repository": "https://github.com/Nothflare/feature-tree",
   "mcpServers": {
     "feature-tree": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/run-server.cmd"
+      "command": "uv",
+      "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "feature-tree", "--project", "."]
     }
   }
 }
