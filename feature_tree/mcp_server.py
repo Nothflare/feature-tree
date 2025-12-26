@@ -35,10 +35,11 @@ Single source of truth for what this project does. Human specifies, you execute.
 ## Status: planned → in-progress → done (or deleted)
 """
 
-# Find project root (where features.db lives)
+# Find project root and .feat-tree directory
 PROJECT_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
-DB_PATH = PROJECT_ROOT / "features.db"
-MD_PATH = PROJECT_ROOT / "FEATURES.md"
+FEAT_TREE_DIR = PROJECT_ROOT / ".feat-tree"
+DB_PATH = FEAT_TREE_DIR / "features.db"
+MD_PATH = FEAT_TREE_DIR / "FEATURES.md"
 
 mcp = FastMCP(
     "feature-tree",
@@ -47,6 +48,7 @@ mcp = FastMCP(
 
 
 def get_db() -> FeatureDB:
+    FEAT_TREE_DIR.mkdir(exist_ok=True)
     return FeatureDB(str(DB_PATH))
 
 

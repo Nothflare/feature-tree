@@ -33,15 +33,17 @@ Session continuity for Claude Code. Companion plugin to feature-tree.
 |-------|-------------|
 | **onboarding** | First-time `.feat-tree/memories/` setup |
 
-## Memory Storage
+## Storage
 
 ```
 .feat-tree/
-└── memories/
-    ├── handoff.md           # Session handoff (auto-read on startup)
-    ├── project_overview.md  # Project context
-    ├── code_style.md        # Coding patterns
-    └── [anything].md        # Whatever helps
+├── features.db              # Feature Tree database
+├── FEATURES.md              # Human-readable features
+└── memories/                # Session memories
+    ├── handoff.md           # Auto-read on startup
+    ├── project_overview.md
+    ├── code_style.md
+    └── [anything].md
 ```
 
 ## Session Handoff

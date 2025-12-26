@@ -69,7 +69,19 @@ Session continuity via handoff and memories. See [ft-mem/README.md](ft-mem/READM
 - **onboarding skill** - First-time memory setup
 - Stores in `.feat-tree/memories/`
 
-## Project Structure
+## Storage (in your project)
+
+```
+your-project/
+└── .feat-tree/
+    ├── features.db          # SQLite database
+    ├── FEATURES.md          # Human-readable feature tree
+    └── memories/            # Session memories (ft-mem)
+        ├── handoff.md
+        └── *.md
+```
+
+## Plugin Structure
 
 ```
 feature-tree/                 # Marketplace
@@ -77,18 +89,12 @@ feature-tree/                 # Marketplace
 │   ├── plugin.json          # feature-tree manifest
 │   └── marketplace.json     # Lists both plugins
 ├── feature_tree/            # MCP server
-│   ├── db.py
-│   ├── markdown.py
-│   └── mcp_server.py
-├── commands/
-│   └── commit.md
+├── commands/commit.md
 ├── ft-mem/                  # Companion plugin
 │   ├── .claude-plugin/
-│   ├── commands/
-│   ├── skills/
+│   ├── commands/handoff.md
+│   ├── skills/onboarding/
 │   └── hooks/
-├── features.db
-├── FEATURES.md
 └── pyproject.toml
 ```
 
