@@ -104,7 +104,7 @@ Claude: I'll track this in the feature tree.
 
         Done. Ready to commit?
 ```
-
+```
 Human: /commit
 
 Claude: [Commits and updates feature status to done]
