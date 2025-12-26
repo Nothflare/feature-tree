@@ -65,6 +65,12 @@ def regenerate_markdown():
 
 
 @mcp.tool()
+def debug_cwd() -> str:
+    """Returns os.getcwd() for debugging path issues."""
+    return os.getcwd()
+
+
+@mcp.tool()
 def search_features(query: str) -> str:
     """Fuzzy search features by name, description, or technical notes. Use before starting work to understand what exists."""
     db = get_db()
