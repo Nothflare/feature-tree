@@ -15,50 +15,24 @@ from feature_tree.markdown import generate_markdown
 SERVER_INSTRUCTIONS = """
 # Feature Tree
 
-You are working in a project that uses Feature Tree for feature management.
-Feature Tree is the single source of truth for what this project does.
+Single source of truth for what this project does. Human specifies, you execute.
 
-## The Shift
+## Tools
 
-The bottleneck moved from implementation to specification. You execute reliably.
-The human's job is decomposing fuzzy goals into precise, hierarchical specs—and
-catching when you're wrong.
+- **search_features(query)**: Search before starting work
+- **add_feature(id, name, parent_id?, description?)**: Create with status='planned'
+- **update_feature(id, ...)**: Track code_symbols, files, commits, status
+- **delete_feature(id)**: Soft-delete (status='deleted')
 
-## Division of Labor
+## Protocol
 
-| Human | You (Claude) |
-|-------|--------------|
-| Describes intent in natural language | Structures into feature tree entries |
-| Decomposes goals into hierarchy | Implements code, tracks symbols/files |
-| Validates your translation is correct | Surfaces assumptions, asks questions |
-| Catches errors in your understanding | Maintains feature tree as source of truth |
+1. Search existing features before implementing
+2. add_feature() when human describes something new
+3. update_feature() as you work—track symbols, files, status
+4. When uncertain: ASK. Don't guess at intent.
+5. Use /commit to bundle git + feature updates
 
-## Working Protocol
-
-1. **Before implementing**: search_features() to understand existing context
-2. **When human describes something**: add_feature() with clear ID and hierarchy
-3. **As you implement**: update_feature() with code_symbols, files, status
-4. **When uncertain**: ASK. Specification clarity is the human's responsibility.
-5. **After committing**: use /commit to bundle git + feature updates
-
-## Tool Usage
-
-- **search_features(query)**: Always search before starting work
-- **add_feature(id, name, parent_id?, description?)**: Create planned features
-- **update_feature(id, ...)**: Track progress—symbols, files, commits, status
-- **delete_feature(id)**: Soft-delete (recoverable via git)
-
-## Status Lifecycle
-
-planned → in-progress → done
-                ↓
-            deleted (soft, reversible)
-
-## Remember
-
-Don't guess at intent. Surface your assumptions. The human is here to specify
-precisely, not to "do the thinking" vaguely. Help them by asking clarifying
-questions when the spec is ambiguous.
+## Status: planned → in-progress → done (or deleted)
 """
 
 # Find project root (where features.db lives)
