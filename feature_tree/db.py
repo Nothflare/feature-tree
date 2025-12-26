@@ -29,30 +29,31 @@ class FeatureDB:
                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
+            -- Standalone FTS5 table (no content sync issues)
             CREATE VIRTUAL TABLE IF NOT EXISTS features_fts USING fts5(
-                id, name, description, technical_notes,
-                content='features',
-                content_rowid='rowid'
+                id, name, description, technical_notes
             );
-
-            CREATE TRIGGER IF NOT EXISTS features_ai AFTER INSERT ON features BEGIN
-                INSERT INTO features_fts(id, name, description, technical_notes)
-                VALUES (new.id, new.name, new.description, new.technical_notes);
-            END;
-
-            CREATE TRIGGER IF NOT EXISTS features_ad AFTER DELETE ON features BEGIN
-                INSERT INTO features_fts(features_fts, id, name, description, technical_notes)
-                VALUES ('delete', old.id, old.name, old.description, old.technical_notes);
-            END;
-
-            CREATE TRIGGER IF NOT EXISTS features_au AFTER UPDATE ON features BEGIN
-                INSERT INTO features_fts(features_fts, id, name, description, technical_notes)
-                VALUES ('delete', old.id, old.name, old.description, old.technical_notes);
-                INSERT INTO features_fts(id, name, description, technical_notes)
-                VALUES (new.id, new.name, new.description, new.technical_notes);
-            END;
         """)
         self.conn.commit()
+
+    def _sync_fts(self, feature_id: str, delete_only: bool = False):
+        """Sync a single feature to FTS index."""
+        # Delete old entry
+        self.conn.execute(
+            "DELETE FROM features_fts WHERE id = ?", (feature_id,)
+        )
+
+        if not delete_only:
+            # Insert current data
+            row = self.conn.execute(
+                "SELECT id, name, description, technical_notes FROM features WHERE id = ?",
+                (feature_id,)
+            ).fetchone()
+            if row:
+                self.conn.execute(
+                    "INSERT INTO features_fts (id, name, description, technical_notes) VALUES (?, ?, ?, ?)",
+                    (row["id"], row["name"], row["description"], row["technical_notes"])
+                )
 
     def execute(self, sql: str, params: tuple = ()):
         return self.conn.execute(sql, params)
@@ -74,6 +75,7 @@ class FeatureDB:
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (id, parent_id, name, description, status, now, now)
         )
+        self._sync_fts(id)
         self.conn.commit()
         return self.get_feature(id)
 
@@ -101,6 +103,7 @@ class FeatureDB:
             f"UPDATE features SET {set_clause} WHERE id = ?",
             values
         )
+        self._sync_fts(id)
         self.conn.commit()
         return self.get_feature(id)
 
@@ -108,12 +111,24 @@ class FeatureDB:
         return self.update_feature(id, status="deleted")
 
     def search_features(self, query: str) -> list[dict]:
-        # FTS5 search
-        rows = self.conn.execute(
-            """SELECT f.* FROM features f
-               JOIN features_fts fts ON f.id = fts.id
-               WHERE features_fts MATCH ? AND f.status != 'deleted'
-               ORDER BY rank""",
-            (query,)
-        ).fetchall()
-        return [dict(row) for row in rows]
+        """FTS5 search with fallback to LIKE for simple queries."""
+        try:
+            # Try FTS5 search
+            rows = self.conn.execute(
+                """SELECT f.* FROM features f
+                   JOIN features_fts fts ON f.id = fts.id
+                   WHERE features_fts MATCH ? AND f.status != 'deleted'
+                   ORDER BY rank""",
+                (query,)
+            ).fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.OperationalError:
+            # Fallback to LIKE search
+            like_query = f"%{query}%"
+            rows = self.conn.execute(
+                """SELECT * FROM features
+                   WHERE status != 'deleted'
+                   AND (name LIKE ? OR description LIKE ? OR technical_notes LIKE ?)""",
+                (like_query, like_query, like_query)
+            ).fetchall()
+            return [dict(row) for row in rows]
