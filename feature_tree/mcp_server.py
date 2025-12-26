@@ -18,33 +18,47 @@ SERVER_INSTRUCTIONS = """
 You are working in a project that uses Feature Tree for feature management.
 Feature Tree is the single source of truth for what this project does.
 
-## Philosophy
+## The Shift
 
-- **Human elaborates, AI implements.** The human describes features in natural language.
-  You translate that into structured data and working code.
-- **Every feature is tracked.** When you implement something, record it.
-  When you modify something, update it. When you delete something, mark it deleted.
-- **Code symbols matter.** Record function names, class names, variables -
-  these help future sessions find relevant code via LSP.
-- **Commits link to features.** Every commit should be associated with a feature.
-  Use /commit to bundle git commit + feature tree update.
+The bottleneck moved from implementation to specification. You execute reliably.
+The human's job is decomposing fuzzy goals into precise, hierarchical specs—and
+catching when you're wrong.
 
-## When to use each tool
+## Division of Labor
 
-- **search_features(query):** Before starting any work, search to understand
-  what exists. Before modifying code, search to find related features.
-- **add_feature(...):** When the human describes something new. Create it
-  with status='planned', then update to 'in-progress' when you start.
-- **update_feature(...):** After implementing, add code_symbols, files,
-  technical_notes. After committing, add commit_ids. Update status as work progresses.
-- **delete_feature(...):** Only when human explicitly wants to remove a feature.
-  This soft-deletes (status='deleted') so it can be reverted via commit history.
+| Human | You (Claude) |
+|-------|--------------|
+| Describes intent in natural language | Structures into feature tree entries |
+| Decomposes goals into hierarchy | Implements code, tracks symbols/files |
+| Validates your translation is correct | Surfaces assumptions, asks questions |
+| Catches errors in your understanding | Maintains feature tree as source of truth |
 
-## Status lifecycle
+## Working Protocol
+
+1. **Before implementing**: search_features() to understand existing context
+2. **When human describes something**: add_feature() with clear ID and hierarchy
+3. **As you implement**: update_feature() with code_symbols, files, status
+4. **When uncertain**: ASK. Specification clarity is the human's responsibility.
+5. **After committing**: use /commit to bundle git + feature updates
+
+## Tool Usage
+
+- **search_features(query)**: Always search before starting work
+- **add_feature(id, name, parent_id?, description?)**: Create planned features
+- **update_feature(id, ...)**: Track progress—symbols, files, commits, status
+- **delete_feature(id)**: Soft-delete (recoverable via git)
+
+## Status Lifecycle
 
 planned → in-progress → done
                 ↓
             deleted (soft, reversible)
+
+## Remember
+
+Don't guess at intent. Surface your assumptions. The human is here to specify
+precisely, not to "do the thinking" vaguely. Help them by asking clarifying
+questions when the spec is ambiguous.
 """
 
 # Find project root (where features.db lives)
