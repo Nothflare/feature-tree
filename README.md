@@ -2,87 +2,87 @@
 
 AI-driven feature management for Claude Code. Track what your project does, link features to code symbols and commits, and maintain a living documentation tree.
 
-## What is Feature Tree?
+## Philosophy
 
-Feature Tree is an MCP server that provides 4 tools for managing project features:
+The bottleneck shifted. It used to be implementation. Now it's specification.
 
-- **search_features** - Fuzzy search across feature names, descriptions, and technical notes
-- **add_feature** - Create new features with hierarchical organization
-- **update_feature** - Track code symbols, files, commits, and status changes
-- **delete_feature** - Soft-delete features (recoverable via git history)
+**Human skill**: Decomposing fuzzy goals into precise, hierarchical specs—and catching when the AI is wrong.
 
-Features are stored in SQLite with FTS5 for fast fuzzy search, and automatically generate a `FEATURES.md` file documenting your project.
+**AI role**: Execute reliably, surface assumptions, ask clarifying questions, maintain the feature tree as source of truth.
 
-## Quick Start
+## Installation
 
-### 1. Install
+### As a Plugin (Recommended)
 
 ```bash
-# Clone or copy to your project
-git clone https://github.com/YOUR_USERNAME/feature-tree.git
-cd feature-tree
+# Add the marketplace
+/plugin marketplace add /path/to/feature-tree
 
-# Install dependencies
-uv sync
+# Install the plugin
+/plugin install feature-tree@feature-tree-dev
+
+# Restart Claude Code
 ```
 
-### 2. Configure Claude Code
+### From GitHub
 
-Add to your project's `.claude/settings.json`:
+```bash
+# Add the repository as a marketplace
+/plugin marketplace add github:your-org/feature-tree
 
-```json
-{
-  "mcpServers": {
-    "feature-tree": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "feature_tree.mcp_server"]
-    }
-  }
-}
+# Install
+/plugin install feature-tree@feature-tree
+
+# Restart Claude Code
 ```
 
-### 3. Restart Claude Code
+## What You Get
 
-The Feature Tree tools will now be available in your Claude Code session.
+### MCP Tools
+
+- **search_features(query)** - Fuzzy search across feature names, descriptions, and notes
+- **add_feature(id, name, ...)** - Create new features with hierarchical organization
+- **update_feature(id, ...)** - Track code symbols, files, commits, and status
+- **delete_feature(id)** - Soft-delete features (recoverable via git)
+
+### Commands
+
+- **/commit** - Bundle git commits with feature tree updates
+
+### Hooks
+
+- **SessionStart** - Injects the Feature Tree philosophy and working protocol
 
 ## Usage
 
 ### Adding Features
 
-When you describe a new feature, Claude will use `add_feature` to track it:
+When you describe a new feature, Claude will track it:
 
 ```
 Human: I want to add user authentication with email/password login
 
 Claude: I'll add this to the feature tree and start implementing...
-[Uses add_feature with id="auth-login", name="User Login", description="..."]
+[Uses add_feature with id="auth-login", name="User Login", ...]
 ```
 
 ### Tracking Implementation
 
-As Claude implements features, it updates them with code symbols and files:
+As Claude implements, it updates features with code context:
 
 ```
 [Uses update_feature to add code_symbols=["AuthService", "loginUser"],
  files=["src/auth.py"], status="in-progress"]
 ```
 
-### Committing with /commit
+### Committing
 
-Use the `/commit` command to bundle git commits with feature updates:
+Use `/commit` to bundle git commits with feature updates:
 
 ```
 Human: /commit
 
 Claude: [Commits changes and updates feature tree with commit hashes]
-```
-
-### Searching Features
-
-Before starting work, Claude searches existing features:
-
-```
-[Uses search_features("auth") to find related features]
 ```
 
 ## Feature Lifecycle
@@ -97,53 +97,54 @@ planned → in-progress → done
 
 ```
 feature-tree/
+├── .claude-plugin/
+│   ├── plugin.json          # Plugin manifest
+│   └── marketplace.json     # Dev marketplace
+├── commands/
+│   └── commit.md            # /commit command
+├── hooks/
+│   ├── hooks.json           # Hook configuration
+│   ├── run-hook.cmd         # Cross-platform wrapper
+│   └── session-start.sh     # Philosophy injection
 ├── feature_tree/
 │   ├── __init__.py
-│   ├── db.py              # SQLite + FTS5 database layer
-│   ├── markdown.py        # FEATURES.md generator
-│   ├── mcp_server.py      # FastMCP server with 4 tools
-│   └── session_hook.py    # SessionStart context injection
+│   ├── db.py                # SQLite + FTS5
+│   ├── markdown.py          # FEATURES.md generator
+│   └── mcp_server.py        # FastMCP server
 ├── tests/
-│   ├── test_db.py
-│   └── test_markdown.py
-├── .claude/
-│   ├── commands/
-│   │   └── commit.md      # /commit slash command
-│   └── settings.json      # MCP + hooks configuration
-├── features.db            # SQLite database (auto-created)
-├── FEATURES.md            # Auto-generated documentation
-└── pyproject.toml
+├── features.db              # SQLite database (auto-created)
+├── FEATURES.md              # Auto-generated documentation
+├── LICENSE
+├── pyproject.toml
+└── README.md
 ```
-
-## Configuration
-
-### Environment Variables
-
-- `CLAUDE_PROJECT_DIR` - Project root directory (defaults to current working directory)
-
-### Database Location
-
-The `features.db` SQLite database is created in the project root. Add it to version control to share feature history across team members.
 
 ## Development
 
 ```bash
-# Install with dev dependencies
+# Install dependencies
 uv sync --extra dev
 
 # Run tests
 uv run pytest -v
 
-# Test MCP server starts
-uv run python -c "from feature_tree.mcp_server import mcp; print('OK')"
+# Test MCP server
+uv run feature-tree
 ```
 
 ## How It Works
 
-1. **SQLite + FTS5**: Features stored in SQLite with full-text search for fast fuzzy matching
-2. **MCP Protocol**: Exposes tools via Model Context Protocol for Claude Code integration
-3. **Auto-generated docs**: Every feature change regenerates `FEATURES.md`
-4. **Hierarchical features**: Features can have parent-child relationships for organization
+1. **SQLite + FTS5**: Features stored with full-text search for fast fuzzy matching
+2. **MCP Protocol**: Tools exposed via Model Context Protocol
+3. **Auto-generated docs**: Every change regenerates `FEATURES.md`
+4. **Hierarchical features**: Parent-child relationships for organization
+5. **Cross-platform hooks**: Works on Windows, macOS, and Linux
+
+## Requirements
+
+- Python 3.11+
+- uv (for dependency management)
+- Git for Windows (on Windows, for hooks)
 
 ## License
 

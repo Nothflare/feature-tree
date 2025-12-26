@@ -1,8 +1,7 @@
-# feature_tree/session_hook.py
-#!/usr/bin/env python
-"""SessionStart hook - injects Feature Tree context and philosophy."""
+#!/bin/bash
+# Feature Tree SessionStart hook - injects philosophy and context
 
-CONTEXT = """
+cat << 'EOF'
 # Feature Tree Philosophy
 
 ## The Shift
@@ -32,6 +31,4 @@ Not "high-level thinking." The specific ability to:
 
 ## Remember
 The human isn't here to "do the thinking" vaguely. They're here to specify precisely and catch your mistakes. Help them do that by surfacing assumptions, asking clarifying questions, and maintaining the feature tree as the shared source of truth.
-"""
-
-print(CONTEXT)
+EOF

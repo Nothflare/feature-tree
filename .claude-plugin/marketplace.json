@@ -1,0 +1,18 @@
+{
+  "name": "feature-tree-dev",
+  "description": "Development marketplace for Feature Tree plugin",
+  "owner": {
+    "name": "Feature Tree Contributors"
+  },
+  "plugins": [
+    {
+      "name": "feature-tree",
+      "description": "AI-driven feature management for Claude Code",
+      "version": "1.0.0",
+      "source": "./",
+      "author": {
+        "name": "Feature Tree Contributors"
+      }
+    }
+  ]
+}
