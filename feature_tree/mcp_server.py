@@ -2,9 +2,7 @@
 #!/usr/bin/env python
 """Feature Tree MCP Server"""
 
-import argparse
 import json
-import os
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -36,7 +34,7 @@ Single source of truth for what this project does. Human specifies, you execute.
 ## Status: planned → in-progress → done (or deleted)
 """
 
-# Global project root - set by main()
+# Project root is cwd (set by ${PROJECT_ROOT} in plugin.json)
 PROJECT_ROOT: Path = Path.cwd()
 
 mcp = FastMCP(
@@ -145,13 +143,6 @@ def delete_feature(id: str) -> str:
 
 
 def main():
-    global PROJECT_ROOT
-
-    parser = argparse.ArgumentParser(description="Feature Tree MCP Server")
-    parser.add_argument("--project", default=".", help="Project directory")
-    args = parser.parse_args()
-
-    PROJECT_ROOT = Path(args.project).resolve()
     mcp.run()
 
 
