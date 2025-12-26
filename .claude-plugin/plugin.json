@@ -7,7 +7,7 @@
   },
   "license": "MIT",
   "keywords": ["mcp", "features", "documentation", "project-management"],
-  "repository": "https://github.com/feature-tree/feature-tree",
+  "repository": "https://github.com/Nothflare/feature-tree",
   "mcpServers": {
     "feature-tree": {
       "command": "uv",

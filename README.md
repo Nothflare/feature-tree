@@ -2,28 +2,41 @@
 
 AI-driven feature management for Claude Code. Track what your project does, link features to code symbols and commits, maintain living documentation.
 
-## Philosophy
+## Why Feature Tree?
 
 The bottleneck shifted from implementation to specification.
 
-**Human skill**: Decomposing fuzzy goals into precise, hierarchical specs—and catching when the AI is wrong.
+Most people think "AI does the coding, humans do the thinking." Too vague. The actual skill is **decomposing intent into structures AI can execute reliably**—and knowing when the AI is wrong.
 
-**AI role**: Execute reliably, surface assumptions, ask clarifying questions, maintain the feature tree as source of truth.
+Feature Tree makes this concrete:
+- **Human** describes features in natural language
+- **Claude** structures them into a hierarchical tree with IDs, status, code symbols
+- **Both** maintain a shared source of truth that persists across sessions
 
 ## Installation
 
+### From GitHub
+
 ```bash
 # Add marketplace
-/plugin marketplace add /path/to/feature-tree
+/plugin marketplace add github:Nothflare/feature-tree
 
-# Install feature-tree (and optionally ft-mem for session continuity)
-/plugin install feature-tree@feature-tree-marketplace
-/plugin install ft-mem@feature-tree-marketplace
+# Install both plugins
+/plugin install feature-tree@feature-tree
+/plugin install ft-mem@feature-tree
 
 # Restart Claude Code
 ```
 
-## Plugins in This Marketplace
+### From Local Path
+
+```bash
+/plugin marketplace add /path/to/feature-tree
+/plugin install feature-tree@feature-tree-marketplace
+/plugin install ft-mem@feature-tree-marketplace
+```
+
+## Plugins
 
 | Plugin | Description |
 |--------|-------------|
@@ -34,24 +47,18 @@ The bottleneck shifted from implementation to specification.
 
 ### MCP Tools
 
-- **search_features(query)** - Fuzzy search features
-- **add_feature(id, name, ...)** - Create features with hierarchy
-- **update_feature(id, ...)** - Track code symbols, files, commits, status
-- **delete_feature(id)** - Soft-delete (recoverable)
+| Tool | Description |
+|------|-------------|
+| `search_features(query)` | Fuzzy search across features |
+| `add_feature(id, name, ...)` | Create with hierarchy |
+| `update_feature(id, ...)` | Track symbols, files, commits, status |
+| `delete_feature(id)` | Soft-delete (recoverable) |
 
 ### Commands
 
-- **/commit** - Bundle git commits with feature tree updates
-
-### Usage
-
-```
-Human: I want to add user authentication
-
-Claude: [Uses add_feature with id="auth", name="Authentication", ...]
-Claude: [Implements, then uses update_feature to track symbols, files]
-Claude: [Uses /commit to commit + update feature tree]
-```
+| Command | Description |
+|---------|-------------|
+| `/commit` | Bundle git commit with feature tree update |
 
 ### Feature Lifecycle
 
@@ -61,47 +68,52 @@ planned → in-progress → done
             deleted (soft, reversible)
 ```
 
-## ft-mem (Companion Plugin)
+## ft-mem
 
-Session continuity via handoff and memories. See [ft-mem/README.md](ft-mem/README.md).
+Session continuity for Claude. See [ft-mem/README.md](ft-mem/README.md).
 
-- **/handoff** - Save session context before /clear
-- **onboarding skill** - First-time memory setup
-- Stores in `.feat-tree/memories/`
+| Component | Description |
+|-----------|-------------|
+| `/handoff` | Save context before /clear |
+| `onboarding` skill | First-time memory setup |
 
-## Storage (in your project)
+## Storage
 
-```
-your-project/
-└── .feat-tree/
-    ├── features.db          # SQLite database
-    ├── FEATURES.md          # Human-readable feature tree
-    └── memories/            # Session memories (ft-mem)
-        ├── handoff.md
-        └── *.md
-```
-
-## Plugin Structure
+All data lives in `.feat-tree/` in your project:
 
 ```
-feature-tree/                 # Marketplace
-├── .claude-plugin/
-│   ├── plugin.json          # feature-tree manifest
-│   └── marketplace.json     # Lists both plugins
-├── feature_tree/            # MCP server
-├── commands/commit.md
-├── ft-mem/                  # Companion plugin
-│   ├── .claude-plugin/
-│   ├── commands/handoff.md
-│   ├── skills/onboarding/
-│   └── hooks/
-└── pyproject.toml
+.feat-tree/
+├── features.db          # SQLite with FTS5
+├── FEATURES.md          # Auto-generated docs
+└── memories/            # Session continuity
+    ├── handoff.md       # Picked up on session start
+    ├── project_overview.md
+    └── [anything].md
+```
+
+## Usage
+
+```
+Human: I want to add user authentication
+
+Claude: I'll track this in the feature tree.
+        [add_feature(id="auth", name="Authentication", ...)]
+
+        Now implementing...
+        [update_feature(id="auth", status="in-progress", code_symbols=["AuthService"])]
+
+        Done. Ready to commit?
+```
+
+Human: /commit
+
+Claude: [Commits and updates feature status to done]
 ```
 
 ## Requirements
 
 - Python 3.11+
-- uv
+- uv (for running the MCP server)
 
 ## License
 

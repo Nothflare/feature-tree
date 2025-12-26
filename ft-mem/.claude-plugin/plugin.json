@@ -6,5 +6,6 @@
     "name": "Feature Tree Contributors"
   },
   "license": "MIT",
-  "keywords": ["memory", "session", "handoff", "continuity"]
+  "keywords": ["memory", "session", "handoff", "continuity"],
+  "repository": "https://github.com/Nothflare/feature-tree"
 }
