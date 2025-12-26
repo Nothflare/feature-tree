@@ -60,7 +60,7 @@ def main():
 ---
 [Onboarding Required]
 No memories in .feat-tree/memories/
-Use the feature-tree:onboarding skill to create memory files.""")
+Use the ft-mem:onboarding skill to create memory files.""")
     else:
         memory_files = [f.stem for f in memories_dir.glob("*.md") if f.stem != "handoff"]
 

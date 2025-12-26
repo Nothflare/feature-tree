@@ -1,0 +1,10 @@
+{
+  "name": "ft-mem",
+  "version": "1.0.0",
+  "description": "Session continuity for Claude Code. Handoff context between sessions, persist project knowledge in memories.",
+  "author": {
+    "name": "Feature Tree Contributors"
+  },
+  "license": "MIT",
+  "keywords": ["memory", "session", "handoff", "continuity"]
+}
