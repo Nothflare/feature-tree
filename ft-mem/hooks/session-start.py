@@ -46,11 +46,6 @@ def main():
         input_data = {}
 
     cwd = input_data.get("cwd", os.getcwd())
-
-    # Write project root for MCP server to find
-    project_marker = Path(cwd) / ".feat-tree" / ".project_root"
-    project_marker.parent.mkdir(parents=True, exist_ok=True)
-    project_marker.write_text(cwd, encoding="utf-8")
     memories_dir = Path(cwd) / ".feat-tree" / "memories"
     handoff_file = memories_dir / "handoff.md"
 
