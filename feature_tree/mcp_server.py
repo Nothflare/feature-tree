@@ -35,27 +35,56 @@ Single source of truth for what this project does. Human specifies, you execute.
 ## Status: planned → in-progress → done (or deleted)
 """
 
-# Find project root and .feat-tree directory
-PROJECT_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
-FEAT_TREE_DIR = PROJECT_ROOT / ".feat-tree"
-DB_PATH = FEAT_TREE_DIR / "features.db"
-MD_PATH = FEAT_TREE_DIR / "FEATURES.md"
-
 mcp = FastMCP(
     "feature-tree",
     instructions=SERVER_INSTRUCTIONS
 )
 
 
+def get_project_root() -> Path:
+    """Get the project root directory from various sources."""
+    # Try environment variables Claude Code might set
+    for env_var in ["CLAUDE_PROJECT_DIR", "PROJECT_DIR", "PWD"]:
+        if path := os.environ.get(env_var):
+            return Path(path)
+
+    # Look for .feat-tree/.project_root marker (written by ft-mem hook)
+    cwd = Path.cwd()
+    for search_dir in [cwd] + list(cwd.parents):
+        marker = search_dir / ".feat-tree" / ".project_root"
+        if marker.exists():
+            try:
+                return Path(marker.read_text(encoding="utf-8").strip())
+            except:
+                pass
+
+    # Fallback: look for .git directory going up from cwd
+    for parent in [cwd] + list(cwd.parents):
+        if (parent / ".git").exists():
+            return parent
+
+    # Last resort: use cwd (may be wrong in plugin context)
+    return cwd
+
+
+def get_feat_tree_dir() -> Path:
+    """Get the .feat-tree directory, creating if needed."""
+    project_root = get_project_root()
+    feat_tree_dir = project_root / ".feat-tree"
+    feat_tree_dir.mkdir(exist_ok=True)
+    return feat_tree_dir
+
+
 def get_db() -> FeatureDB:
-    FEAT_TREE_DIR.mkdir(exist_ok=True)
-    return FeatureDB(str(DB_PATH))
+    db_path = get_feat_tree_dir() / "features.db"
+    return FeatureDB(str(db_path))
 
 
 def regenerate_markdown():
     db = get_db()
     md = generate_markdown(db)
-    MD_PATH.write_text(md, encoding="utf-8")
+    md_path = get_feat_tree_dir() / "FEATURES.md"
+    md_path.write_text(md, encoding="utf-8")
     db.close()
 
 
