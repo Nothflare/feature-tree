@@ -35,8 +35,15 @@ Single source of truth for what this project does. Human specifies, you execute.
 ## Status: planned → in-progress → done (or deleted)
 """
 
-# Project root is inherited cwd (uv --directory only affects pyproject.toml lookup, not subprocess cwd)
-PROJECT_ROOT: Path = Path(os.getcwd())
+def get_project_root() -> Path:
+    """Get project root from hook-written file, fallback to cwd."""
+    current_project_file = Path.home() / ".feat-tree" / "current-project"
+    if current_project_file.exists():
+        try:
+            return Path(current_project_file.read_text(encoding="utf-8").strip())
+        except Exception:
+            pass
+    return Path(os.getcwd())
 
 mcp = FastMCP(
     "feature-tree",
@@ -46,7 +53,7 @@ mcp = FastMCP(
 
 def get_feat_tree_dir() -> Path:
     """Get the .feat-tree directory, creating if needed."""
-    feat_tree_dir = PROJECT_ROOT / ".feat-tree"
+    feat_tree_dir = get_project_root() / ".feat-tree"
     feat_tree_dir.mkdir(exist_ok=True)
     return feat_tree_dir
 
@@ -66,8 +73,10 @@ def regenerate_markdown():
 
 @mcp.tool()
 def debug_cwd() -> str:
-    """Returns os.getcwd() for debugging path issues."""
-    return os.getcwd()
+    """Returns path info for debugging."""
+    current_project_file = Path.home() / ".feat-tree" / "current-project"
+    hook_path = current_project_file.read_text(encoding="utf-8").strip() if current_project_file.exists() else "(not found)"
+    return f"os.getcwd(): {os.getcwd()}\nhook file: {hook_path}\nget_project_root(): {get_project_root()}"
 
 
 @mcp.tool()
