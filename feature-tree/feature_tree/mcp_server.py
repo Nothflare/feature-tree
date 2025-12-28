@@ -15,26 +15,53 @@ from feature_tree.markdown import generate_features_markdown, generate_workflows
 SERVER_INSTRUCTIONS = """
 # Feature Tree
 
-Two parallel trees: Features (what exists) and Workflows (how it's used).
+Two parallel trees: Features (atomic code units) and Workflows (user-facing experiences).
 
-## Features (what exists)
-- **search_features(query)**: Fuzzy search
-- **get_feature(id)**: Full details + linked workflows
-- **add_feature(id, name, parent_id?, description?)**
-- **update_feature(id, ...)**: Track code_symbols, files, commits, status
-- **delete_feature(id)**: Hard if planned, soft if in-progress/done
+## ATOMIC FEATURES
 
-## Workflows (how features are used)
-- **search_workflows(query)**: Fuzzy search journeys/flows
-- **get_workflow(id)**: Full details + linked features
-- **add_workflow(id, name, type, parent_id?, depends_on?, mermaid?, ...)**
-  - type: "journey" (user goal) or "flow" (steps to achieve)
-  - depends_on: list of feature IDs this flow uses
+Features are small, implementable units. NOT categories.
+
+BAD: "User Authentication" (category - can't implement in one task)
+GOOD: "User Login", "Email Verification", "Password Reset" (atomic - one task each)
+
+Rule: If you can't "implement this feature" and get a complete, testable unit - it's not atomic enough.
+
+## WHY TRACK SYMBOLS, FILES, NOTES
+
+Every 1x effort noting these = 10x saved later.
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| Symbols | LSP-queryable identifiers | handleLogin, UserSession |
+| Files | Paths involved | src/auth/login.ts |
+| Notes | What code can't capture | "Uses Redis for rate limiting" |
+
+Without tracking: You guess → inconsistent code → hours debugging.
+With tracking: Query symbols → read only relevant files → precise edits.
+
+DO NOT skip this. It's what keeps the codebase flexible as it grows.
+
+## WORKFLOWS
+
+Workflows are user-facing experiences composed from features.
+They answer: "What does the user actually do?"
+
+Example: Login Flow depends on [TURNSTILE.Verify, AUTH.Login, DB.Session]
+
+Why both trees?
+- Features only → technically correct but UX is accidental
+- Workflows only → clear intent but implementation gaps
+- Both → modify a feature, see which workflows break. Design a workflow, see what features exist vs. need building.
+
+## Tools
+
+Features: search_features, get_feature, add_feature, update_feature, delete_feature
+Workflows: search_workflows, get_workflow, add_workflow
 
 ## Protocol
 1. Search before implementing
-2. Features = components, Workflows = how they compose
-3. Flows reference features via depends_on
+2. Features = atomic units, Workflows = compositions
+3. ALWAYS update symbols/files/notes after implementing
 4. When uncertain: ASK
 
 ## Status: planned → in-progress → done (or deleted)
@@ -134,7 +161,7 @@ def update_feature(
     technical_notes: str | None = None,
     description: str | None = None
 ) -> str:
-    """Update a feature's fields. Use after implementing to record code_symbols, files, commit_ids, status changes."""
+    """Update a feature. ALWAYS record code_symbols + files after implementing. 1x effort now = 10x saved later."""
     db = get_db()
     try:
         fields = {}
