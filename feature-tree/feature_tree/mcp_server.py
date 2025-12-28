@@ -9,7 +9,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from feature_tree.db import FeatureDB
-from feature_tree.markdown import generate_markdown
+from feature_tree.markdown import generate_features_markdown, generate_workflows_markdown
 
 
 SERVER_INSTRUCTIONS = """
@@ -70,9 +70,16 @@ def get_db() -> FeatureDB:
 
 def regenerate_markdown():
     db = get_db()
-    md = generate_markdown(db)
-    md_path = get_feat_tree_dir() / "FEATURES.md"
-    md_path.write_text(md, encoding="utf-8")
+    feat_tree_dir = get_feat_tree_dir()
+
+    # Generate FEATURES.md
+    features_md = generate_features_markdown(db)
+    (feat_tree_dir / "FEATURES.md").write_text(features_md, encoding="utf-8")
+
+    # Generate WORKFLOWS.md
+    workflows_md = generate_workflows_markdown(db)
+    (feat_tree_dir / "WORKFLOWS.md").write_text(workflows_md, encoding="utf-8")
+
     db.close()
 
 

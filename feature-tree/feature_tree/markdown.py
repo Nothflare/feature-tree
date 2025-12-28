@@ -4,17 +4,17 @@ from typing import Optional
 from feature_tree.db import FeatureDB
 
 
-def generate_markdown(db: FeatureDB) -> str:
+def generate_features_markdown(db: FeatureDB) -> str:
+    """Generate FEATURES.md content."""
     features = db.execute(
         "SELECT * FROM features WHERE status != 'deleted' ORDER BY id"
     ).fetchall()
     features = [dict(f) for f in features]
 
-    # Build tree structure
     tree = build_tree(features)
 
     lines = [
-        "# Feature Tree",
+        "# Features",
         "",
         "> Auto-generated. Do not edit. Use Claude Code to modify.",
         ""
@@ -24,6 +24,33 @@ def generate_markdown(db: FeatureDB) -> str:
         lines.extend(render_feature(root, level=2))
 
     return "\n".join(lines)
+
+
+def generate_workflows_markdown(db: FeatureDB) -> str:
+    """Generate WORKFLOWS.md content with mermaid diagrams."""
+    workflows = db.execute(
+        "SELECT * FROM workflows WHERE status != 'deleted' ORDER BY type, id"
+    ).fetchall()
+    workflows = [dict(w) for w in workflows]
+
+    tree = build_tree(workflows)
+
+    lines = [
+        "# Workflows",
+        "",
+        "> Auto-generated. Do not edit. Use Claude Code to modify.",
+        ""
+    ]
+
+    for root in tree:
+        lines.extend(render_workflow(root, level=2, db=db))
+
+    return "\n".join(lines)
+
+
+# Backwards compat
+def generate_markdown(db: FeatureDB) -> str:
+    return generate_features_markdown(db)
 
 
 def build_tree(features: list[dict]) -> list[dict]:
@@ -75,5 +102,46 @@ def render_feature(feature: dict, level: int) -> list[str]:
     # Children
     for child in feature.get("children", []):
         lines.extend(render_feature(child, level + 1))
+
+    return lines
+
+
+def render_workflow(workflow: dict, level: int, db: FeatureDB) -> list[str]:
+    lines = []
+    prefix = "#" * level
+
+    # Header with type badge
+    type_badge = "🎯" if workflow["type"] == "journey" else "→"
+    lines.append(f"{prefix} {type_badge} {workflow['id']}")
+    lines.append(f"**{workflow['name']}**")
+
+    if workflow.get("purpose"):
+        lines.append(f"*{workflow['purpose']}*")
+    if workflow.get("description"):
+        lines.append(workflow["description"])
+    lines.append("")
+
+    # Metadata
+    lines.append(f"- **Type:** {workflow['type']}")
+    lines.append(f"- **Status:** {workflow['status']}")
+
+    # Linked features
+    if workflow.get("depends_on"):
+        depends = json.loads(workflow["depends_on"])
+        if depends:
+            lines.append(f"- **Depends on:** {', '.join(depends)}")
+
+    lines.append("")
+
+    # Mermaid diagram
+    if workflow.get("mermaid"):
+        lines.append("```mermaid")
+        lines.append(workflow["mermaid"])
+        lines.append("```")
+        lines.append("")
+
+    # Children (flows under journey)
+    for child in workflow.get("children", []):
+        lines.extend(render_workflow(child, level + 1, db))
 
     return lines
