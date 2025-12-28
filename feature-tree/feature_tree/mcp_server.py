@@ -85,7 +85,12 @@ def search_features(query: str) -> str:
     db = get_db()
     try:
         results = db.search_features(query)
-        return json.dumps(results, indent=2, default=str)
+        # Trim to essential fields only
+        trimmed = [
+            {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
+            for r in results
+        ]
+        return json.dumps(trimmed)
     finally:
         db.close()
 
@@ -100,14 +105,9 @@ def add_feature(
     """Create a new feature. Use when human describes something new."""
     db = get_db()
     try:
-        feature = db.add_feature(
-            id=id,
-            name=name,
-            parent_id=parent_id,
-            description=description
-        )
+        db.add_feature(id=id, name=name, parent_id=parent_id, description=description)
         regenerate_markdown()
-        return f"Created feature: {json.dumps(feature, indent=2, default=str)}"
+        return '{"ok":true}'
     finally:
         db.close()
 
@@ -139,9 +139,9 @@ def update_feature(
         if description is not None:
             fields["description"] = description
 
-        feature = db.update_feature(id, **fields)
+        db.update_feature(id, **fields)
         regenerate_markdown()
-        return f"Updated feature: {json.dumps(feature, indent=2, default=str)}"
+        return '{"ok":true}'
     finally:
         db.close()
 
@@ -151,9 +151,9 @@ def delete_feature(id: str) -> str:
     """Soft-delete a feature (sets status='deleted'). Feature can be reverted via commit history."""
     db = get_db()
     try:
-        feature = db.delete_feature(id)
+        db.delete_feature(id)
         regenerate_markdown()
-        return f"Deleted feature: {json.dumps(feature, indent=2, default=str)}"
+        return '{"ok":true}'
     finally:
         db.close()
 

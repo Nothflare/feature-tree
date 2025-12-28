@@ -8,7 +8,7 @@
     {
       "name": "feature-tree",
       "description": "AI-driven feature management. Track features, link to code symbols and commits.",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "source": "./feature-tree",
       "author": {
         "name": "Feature Tree Contributors"
