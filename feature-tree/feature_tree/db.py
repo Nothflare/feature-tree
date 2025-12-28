@@ -107,8 +107,45 @@ class FeatureDB:
         self.conn.commit()
         return self.get_feature(id)
 
-    def delete_feature(self, id: str) -> Optional[dict]:
-        return self.update_feature(id, status="deleted")
+    def get_children(self, id: str) -> list[dict]:
+        """Get direct children of a feature."""
+        rows = self.conn.execute(
+            "SELECT * FROM features WHERE parent_id = ?", (id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def has_protected_children(self, id: str) -> bool:
+        """Check if feature has children with status in-progress or done."""
+        row = self.conn.execute(
+            "SELECT COUNT(*) FROM features WHERE parent_id = ? AND status IN ('in-progress', 'done')",
+            (id,)
+        ).fetchone()
+        return row[0] > 0
+
+    def hard_delete_feature(self, id: str):
+        """Permanently remove feature from database."""
+        self._sync_fts(id, delete_only=True)
+        self.conn.execute("DELETE FROM features WHERE id = ?", (id,))
+        self.conn.commit()
+
+    def delete_feature(self, id: str) -> dict:
+        """Delete feature. Returns {"type": "hard"/"soft", "error": ...}"""
+        feature = self.get_feature(id)
+        if not feature:
+            return {"ok": False, "error": "feature not found"}
+
+        # Check for protected children
+        if self.has_protected_children(id):
+            return {"ok": False, "error": "has children with status in-progress or done"}
+
+        status = feature.get("status", "planned")
+
+        if status == "planned":
+            self.hard_delete_feature(id)
+            return {"ok": True, "type": "hard"}
+        else:
+            self.update_feature(id, status="deleted")
+            return {"ok": True, "type": "soft"}
 
     def search_features(self, query: str) -> list[dict]:
         """FTS5 search with fallback to LIKE for simple queries."""

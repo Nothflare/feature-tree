@@ -147,13 +147,27 @@ def update_feature(
 
 
 @mcp.tool()
-def delete_feature(id: str) -> str:
-    """Soft-delete a feature (sets status='deleted'). Feature can be reverted via commit history."""
+def get_feature(id: str) -> str:
+    """Get full details of a single feature by ID."""
     db = get_db()
     try:
-        db.delete_feature(id)
-        regenerate_markdown()
-        return '{"ok":true}'
+        feature = db.get_feature(id)
+        if feature:
+            return json.dumps(feature, default=str)
+        return '{"ok":false,"error":"not found"}'
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def delete_feature(id: str) -> str:
+    """Delete a feature. Hard-deletes if planned, soft-deletes if in-progress/done."""
+    db = get_db()
+    try:
+        result = db.delete_feature(id)
+        if result.get("ok"):
+            regenerate_markdown()
+        return json.dumps(result)
     finally:
         db.close()
 
