@@ -33,6 +33,25 @@ class FeatureDB:
             CREATE VIRTUAL TABLE IF NOT EXISTS features_fts USING fts5(
                 id, name, description, technical_notes
             );
+
+            -- Workflows: journeys and flows
+            CREATE TABLE IF NOT EXISTS workflows (
+                id            TEXT PRIMARY KEY,
+                parent_id     TEXT REFERENCES workflows(id),
+                name          TEXT NOT NULL,
+                type          TEXT NOT NULL CHECK(type IN ('journey', 'flow')),
+                description   TEXT,
+                purpose       TEXT,
+                depends_on    TEXT,
+                mermaid       TEXT,
+                status        TEXT DEFAULT 'planned',
+                created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE VIRTUAL TABLE IF NOT EXISTS workflows_fts USING fts5(
+                id, name, description, purpose
+            );
         """)
         self.conn.commit()
 
@@ -169,3 +188,94 @@ class FeatureDB:
                 (like_query, like_query, like_query)
             ).fetchall()
             return [dict(row) for row in rows]
+
+    # ==================== WORKFLOWS ====================
+
+    def _sync_workflow_fts(self, workflow_id: str, delete_only: bool = False):
+        """Sync a single workflow to FTS index."""
+        self.conn.execute("DELETE FROM workflows_fts WHERE id = ?", (workflow_id,))
+        if not delete_only:
+            row = self.conn.execute(
+                "SELECT id, name, description, purpose FROM workflows WHERE id = ?",
+                (workflow_id,)
+            ).fetchone()
+            if row:
+                self.conn.execute(
+                    "INSERT INTO workflows_fts (id, name, description, purpose) VALUES (?, ?, ?, ?)",
+                    (row["id"], row["name"], row["description"], row["purpose"])
+                )
+
+    def add_workflow(
+        self,
+        id: str,
+        name: str,
+        type: str,
+        parent_id: Optional[str] = None,
+        description: Optional[str] = None,
+        purpose: Optional[str] = None,
+        depends_on: Optional[list[str]] = None,
+        mermaid: Optional[str] = None
+    ) -> dict:
+        if type not in ("journey", "flow"):
+            return {"ok": False, "error": "type must be 'journey' or 'flow'"}
+        now = datetime.now(UTC).isoformat()
+        depends_json = json.dumps(depends_on) if depends_on else None
+        self.conn.execute(
+            """INSERT INTO workflows (id, parent_id, name, type, description, purpose, depends_on, mermaid, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, parent_id, name, type, description, purpose, depends_json, mermaid, now, now)
+        )
+        self._sync_workflow_fts(id)
+        self.conn.commit()
+        return {"ok": True}
+
+    def get_workflow(self, id: str) -> Optional[dict]:
+        row = self.conn.execute("SELECT * FROM workflows WHERE id = ?", (id,)).fetchone()
+        return dict(row) if row else None
+
+    def search_workflows(self, query: str) -> list[dict]:
+        """FTS5 search with fallback to LIKE."""
+        try:
+            rows = self.conn.execute(
+                """SELECT w.* FROM workflows w
+                   JOIN workflows_fts wfts ON w.id = wfts.id
+                   WHERE workflows_fts MATCH ? AND w.status != 'deleted'
+                   ORDER BY rank""",
+                (query,)
+            ).fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.OperationalError:
+            like_query = f"%{query}%"
+            rows = self.conn.execute(
+                """SELECT * FROM workflows
+                   WHERE status != 'deleted'
+                   AND (name LIKE ? OR description LIKE ? OR purpose LIKE ?)""",
+                (like_query, like_query, like_query)
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_workflows_for_feature(self, feature_id: str) -> list[dict]:
+        """Get workflows that depend on a feature."""
+        rows = self.conn.execute(
+            "SELECT * FROM workflows WHERE status != 'deleted'"
+        ).fetchall()
+        result = []
+        for row in rows:
+            w = dict(row)
+            depends = json.loads(w.get("depends_on") or "[]")
+            if feature_id in depends:
+                result.append(w)
+        return result
+
+    def get_features_for_workflow(self, workflow_id: str) -> list[dict]:
+        """Get features that a workflow depends on."""
+        workflow = self.get_workflow(workflow_id)
+        if not workflow:
+            return []
+        depends = json.loads(workflow.get("depends_on") or "[]")
+        result = []
+        for fid in depends:
+            f = self.get_feature(fid)
+            if f:
+                result.append(f)
+        return result

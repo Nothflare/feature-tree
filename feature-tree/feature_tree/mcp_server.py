@@ -15,22 +15,27 @@ from feature_tree.markdown import generate_markdown
 SERVER_INSTRUCTIONS = """
 # Feature Tree
 
-Single source of truth for what this project does. Human specifies, you execute.
+Two parallel trees: Features (what exists) and Workflows (how it's used).
 
-## Tools
-
-- **search_features(query)**: Search before starting work
-- **add_feature(id, name, parent_id?, description?)**: Create with status='planned'
+## Features (what exists)
+- **search_features(query)**: Fuzzy search
+- **get_feature(id)**: Full details + linked workflows
+- **add_feature(id, name, parent_id?, description?)**
 - **update_feature(id, ...)**: Track code_symbols, files, commits, status
-- **delete_feature(id)**: Soft-delete (status='deleted')
+- **delete_feature(id)**: Hard if planned, soft if in-progress/done
+
+## Workflows (how features are used)
+- **search_workflows(query)**: Fuzzy search journeys/flows
+- **get_workflow(id)**: Full details + linked features
+- **add_workflow(id, name, type, parent_id?, depends_on?, mermaid?, ...)**
+  - type: "journey" (user goal) or "flow" (steps to achieve)
+  - depends_on: list of feature IDs this flow uses
 
 ## Protocol
-
-1. Search existing features before implementing
-2. add_feature() when human describes something new
-3. update_feature() as you work—track symbols, files, status
-4. When uncertain: ASK. Don't guess at intent.
-5. Use /commit to bundle git + feature updates
+1. Search before implementing
+2. Features = components, Workflows = how they compose
+3. Flows reference features via depends_on
+4. When uncertain: ASK
 
 ## Status: planned → in-progress → done (or deleted)
 """
@@ -148,11 +153,17 @@ def update_feature(
 
 @mcp.tool()
 def get_feature(id: str) -> str:
-    """Get full details of a single feature by ID."""
+    """Get full details of a single feature by ID, including linked workflows."""
     db = get_db()
     try:
         feature = db.get_feature(id)
         if feature:
+            # Add linked workflows
+            workflows = db.get_workflows_for_feature(id)
+            feature["linked_workflows"] = [
+                {"id": w["id"], "name": w["name"], "type": w["type"]}
+                for w in workflows
+            ]
             return json.dumps(feature, default=str)
         return '{"ok":false,"error":"not found"}'
     finally:
@@ -168,6 +179,67 @@ def delete_feature(id: str) -> str:
         if result.get("ok"):
             regenerate_markdown()
         return json.dumps(result)
+    finally:
+        db.close()
+
+
+# ==================== WORKFLOWS ====================
+
+@mcp.tool()
+def search_workflows(query: str) -> str:
+    """Fuzzy search workflows (journeys/flows) by name, description, or purpose."""
+    db = get_db()
+    try:
+        results = db.search_workflows(query)
+        trimmed = [
+            {"id": r["id"], "name": r["name"], "type": r["type"], "status": r["status"], "parent_id": r.get("parent_id")}
+            for r in results
+        ]
+        return json.dumps(trimmed)
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def add_workflow(
+    id: str,
+    name: str,
+    type: str,
+    parent_id: str | None = None,
+    description: str | None = None,
+    purpose: str | None = None,
+    depends_on: list[str] | None = None,
+    mermaid: str | None = None
+) -> str:
+    """Create a workflow. type='journey' for user goals, type='flow' for steps. depends_on links to feature IDs."""
+    db = get_db()
+    try:
+        result = db.add_workflow(
+            id=id, name=name, type=type, parent_id=parent_id,
+            description=description, purpose=purpose,
+            depends_on=depends_on, mermaid=mermaid
+        )
+        regenerate_markdown()
+        return json.dumps(result)
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def get_workflow(id: str) -> str:
+    """Get full details of a workflow by ID, including linked features."""
+    db = get_db()
+    try:
+        workflow = db.get_workflow(id)
+        if workflow:
+            # Add linked features
+            features = db.get_features_for_workflow(id)
+            workflow["linked_features"] = [
+                {"id": f["id"], "name": f["name"], "status": f["status"]}
+                for f in features
+            ]
+            return json.dumps(workflow, default=str)
+        return '{"ok":false,"error":"not found"}'
     finally:
         db.close()
 
