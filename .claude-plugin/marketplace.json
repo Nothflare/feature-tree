@@ -8,7 +8,7 @@
     {
       "name": "feature-tree",
       "description": "AI-driven feature management. Track features, link to code symbols and commits.",
-      "version": "1.0.8",
+      "version": "1.0.9",
       "source": "./feature-tree",
       "author": {
         "name": "Feature Tree Contributors"
@@ -17,7 +17,7 @@
     {
       "name": "ft-mem",
       "description": "Session continuity. Handoff context between sessions, persist project knowledge.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "source": "./ft-mem",
       "author": {
         "name": "Feature Tree Contributors"

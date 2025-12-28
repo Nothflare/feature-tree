@@ -1,6 +1,6 @@
 {
   "name": "ft-mem",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Session continuity for Claude Code. Handoff context between sessions, persist project knowledge in memories.",
   "author": {
     "name": "Feature Tree Contributors"
