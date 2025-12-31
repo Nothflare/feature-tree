@@ -1,119 +1,130 @@
 # Feature Tree
 
-AI-driven feature management for Claude Code. Track what your project does, link features to code symbols and commits, maintain living documentation.
+Two parallel trees for Claude Code: **Features** (atomic code units) and **Workflows** (user-facing experiences).
 
-## Why Feature Tree?
+## Why?
 
 The bottleneck shifted from implementation to specification.
 
-Most people think "AI does the coding, humans do the thinking." Too vague. The actual skill is **decomposing intent into structures AI can execute reliably**—and knowing when the AI is wrong.
+| Features only | Workflows only | Both |
+|---------------|----------------|------|
+| Technically correct | Clear user intent | Modify a feature → see which workflows break |
+| UX is accidental | Implementation gaps | Design a workflow → see what exists vs. needs building |
 
-Feature Tree makes this concrete:
-- **Human** describes features in natural language
-- **Claude** structures them into a hierarchical tree with IDs, status, code symbols
-- **Both** maintain a shared source of truth that persists across sessions
+## Core Concepts
+
+### Atomic Features
+
+Features are small, implementable units. NOT categories.
+
+```
+BAD:  "User Authentication" (category - can't implement in one task)
+GOOD: "User Login", "Email Verification", "Password Reset" (atomic)
+```
+
+**Rule:** If you can't "implement this feature" and get a complete, testable unit - it's not atomic enough.
+
+### Track Symbols, Files, Notes
+
+Every 1x effort noting these = 10x saved later.
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| Symbols | LSP-queryable identifiers | `handleLogin`, `UserSession` |
+| Files | Paths involved | `src/auth/login.ts` |
+| Notes | What code can't capture | "Uses Redis for rate limiting" |
+
+Without tracking: Claude guesses → inconsistent code → hours debugging.
+
+### Workflows
+
+Workflows compose features into user-facing experiences:
+
+```
+Login Flow depends on → [TURNSTILE.Verify, AUTH.Login, DB.Session]
+```
 
 ## Installation
 
-### From GitHub
-
 ```bash
-# Add marketplace
 /plugin marketplace add github:Nothflare/feature-tree
-
-# Install both plugins
 /plugin install feature-tree@feature-tree
 /plugin install ft-mem@feature-tree
-
 # Restart Claude Code
-```
-
-### From Local Path
-
-```bash
-/plugin marketplace add /path/to/feature-tree
-/plugin install feature-tree@feature-tree-marketplace
-/plugin install ft-mem@feature-tree-marketplace
 ```
 
 ## Plugins
 
 | Plugin | Description |
 |--------|-------------|
-| **feature-tree** | MCP tools for feature management |
-| **ft-mem** | Session continuity (handoff, memories) |
+| **feature-tree** | MCP tools + `/bootstrap` skill |
+| **ft-mem** | Session continuity (handoff, memories, onboarding) |
 
-## feature-tree
+## MCP Tools
 
-### MCP Tools
+### Features
 
 | Tool | Description |
 |------|-------------|
-| `search_features(query)` | Fuzzy search across features |
-| `add_feature(id, name, ...)` | Create with hierarchy |
+| `search_features(query)` | Fuzzy search, trimmed output |
+| `get_feature(id)` | Full details + linked workflows |
+| `add_feature(id, name, ...)` | Create atomic feature |
 | `update_feature(id, ...)` | Track symbols, files, commits, status |
-| `delete_feature(id)` | Soft-delete (recoverable) |
+| `delete_feature(id)` | Hard if planned, soft if in-progress/done |
 
-### Commands
+### Workflows
 
-| Command | Description |
-|---------|-------------|
-| `/commit` | Bundle git commit with feature tree update |
+| Tool | Description |
+|------|-------------|
+| `search_workflows(query)` | Fuzzy search journeys/flows |
+| `get_workflow(id)` | Full details + linked features |
+| `add_workflow(id, name, type, depends_on?, mermaid?)` | Create journey or flow |
 
-### Feature Lifecycle
+## Skills
 
-```
-planned → in-progress → done
-                ↓
-            deleted (soft, reversible)
-```
-
-## ft-mem
-
-Session continuity for Claude. See [ft-mem/README.md](ft-mem/README.md).
-
-| Component | Description |
-|-----------|-------------|
-| `/handoff` | Save context before /clear |
-| `onboarding` skill | First-time memory setup |
+| Skill | Description |
+|-------|-------------|
+| `/bootstrap` | Scan codebase by tracing workflows |
+| `/ft-mem:onboarding` | First-time setup (CONTEXT.md + memories) |
+| `/ft-mem:handoff` | Save context before /clear |
 
 ## Storage
 
-All data lives in `.feat-tree/` in your project:
-
 ```
 .feat-tree/
-├── features.db          # SQLite with FTS5
-├── FEATURES.md          # Auto-generated docs
-└── memories/            # Session continuity
-    ├── handoff.md       # Picked up on session start
-    ├── project_overview.md
-    └── [anything].md
+├── features.db      # SQLite + FTS5
+├── FEATURES.md      # Auto-generated
+├── WORKFLOWS.md     # Auto-generated (with mermaid)
+├── CONTEXT.md       # Product context (created by onboarding)
+└── memories/        # Session continuity
+```
+
+## Feature Lifecycle
+
+```
+planned → in-progress → done
+   ↓
+hard delete (no trace)    soft delete (recoverable)
 ```
 
 ## Usage
 
 ```
-Human: I want to add user authentication
+Human: Add user signup flow
 
-Claude: I'll track this in the feature tree.
-        [add_feature(id="auth", name="Authentication", ...)]
+Claude: [search_features("signup")] - checking existing
+        [add_workflow(id="signup-flow", type="flow", depends_on=[...])]
+        [add_feature(id="auth-register", name="User Registration")]
 
-        Now implementing...
-        [update_feature(id="auth", status="in-progress", code_symbols=["AuthService"])]
-
-        Done. Ready to commit?
-```
-```
-Human: /commit
-
-Claude: [Commits and updates feature status to done]
+        Implementing...
+        [update_feature(id="auth-register", status="in-progress",
+                       code_symbols=["registerUser"], files=["src/auth/register.ts"])]
 ```
 
 ## Requirements
 
 - Python 3.11+
-- uv (for running the MCP server)
+- uv
 
 ## License
 
