@@ -279,3 +279,57 @@ class FeatureDB:
             if f:
                 result.append(f)
         return result
+
+    def update_workflow(self, id: str, **fields) -> Optional[dict]:
+        """Update a workflow's fields."""
+        if not fields:
+            return self.get_workflow(id)
+
+        # Convert lists to JSON
+        if "depends_on" in fields and isinstance(fields["depends_on"], list):
+            fields["depends_on"] = json.dumps(fields["depends_on"])
+
+        fields["updated_at"] = datetime.now(UTC).isoformat()
+
+        set_clause = ", ".join(f"{k} = ?" for k in fields.keys())
+        values = list(fields.values()) + [id]
+
+        self.conn.execute(
+            f"UPDATE workflows SET {set_clause} WHERE id = ?",
+            values
+        )
+        self._sync_workflow_fts(id)
+        self.conn.commit()
+        return self.get_workflow(id)
+
+    def has_protected_workflow_children(self, id: str) -> bool:
+        """Check if workflow has children with status in-progress or done."""
+        row = self.conn.execute(
+            "SELECT COUNT(*) FROM workflows WHERE parent_id = ? AND status IN ('in-progress', 'done')",
+            (id,)
+        ).fetchone()
+        return row[0] > 0
+
+    def hard_delete_workflow(self, id: str):
+        """Permanently remove workflow from database."""
+        self._sync_workflow_fts(id, delete_only=True)
+        self.conn.execute("DELETE FROM workflows WHERE id = ?", (id,))
+        self.conn.commit()
+
+    def delete_workflow(self, id: str) -> dict:
+        """Delete workflow. Hard if planned, soft if in-progress/done."""
+        workflow = self.get_workflow(id)
+        if not workflow:
+            return {"ok": False, "error": "workflow not found"}
+
+        if self.has_protected_workflow_children(id):
+            return {"ok": False, "error": "has children with status in-progress or done"}
+
+        status = workflow.get("status", "planned")
+
+        if status == "planned":
+            self.hard_delete_workflow(id)
+            return {"ok": True, "type": "hard"}
+        else:
+            self.update_workflow(id, status="deleted")
+            return {"ok": True, "type": "soft"}

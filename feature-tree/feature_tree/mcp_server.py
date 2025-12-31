@@ -56,7 +56,7 @@ Why both trees?
 ## Tools
 
 Features: search_features, get_feature, add_feature, update_feature, delete_feature
-Workflows: search_workflows, get_workflow, add_workflow
+Workflows: search_workflows, get_workflow, add_workflow, update_workflow, delete_workflow
 
 ## Protocol
 1. Search before implementing
@@ -274,6 +274,50 @@ def get_workflow(id: str) -> str:
             ]
             return json.dumps(workflow, default=str)
         return '{"ok":false,"error":"not found"}'
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def update_workflow(
+    id: str,
+    status: str | None = None,
+    depends_on: list[str] | None = None,
+    mermaid: str | None = None,
+    description: str | None = None,
+    purpose: str | None = None
+) -> str:
+    """Update a workflow's fields."""
+    db = get_db()
+    try:
+        fields = {}
+        if status is not None:
+            fields["status"] = status
+        if depends_on is not None:
+            fields["depends_on"] = depends_on
+        if mermaid is not None:
+            fields["mermaid"] = mermaid
+        if description is not None:
+            fields["description"] = description
+        if purpose is not None:
+            fields["purpose"] = purpose
+
+        db.update_workflow(id, **fields)
+        regenerate_markdown()
+        return '{"ok":true}'
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def delete_workflow(id: str) -> str:
+    """Delete a workflow. Hard if planned, soft if in-progress/done."""
+    db = get_db()
+    try:
+        result = db.delete_workflow(id)
+        if result.get("ok"):
+            regenerate_markdown()
+        return json.dumps(result)
     finally:
         db.close()
 

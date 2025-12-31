@@ -88,6 +88,8 @@ Journeys contain flows. Flows reference features.
 | `search_workflows(query)` | Fuzzy search journeys/flows |
 | `get_workflow(id)` | Full details + linked features |
 | `add_workflow(id, name, type, depends_on?, mermaid?)` | Create journey or flow |
+| `update_workflow(id, ...)` | Update status, depends_on, mermaid |
+| `delete_workflow(id)` | Hard if planned, soft if in-progress/done |
 
 ## Skills
 
