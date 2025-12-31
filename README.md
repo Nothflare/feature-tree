@@ -1,15 +1,29 @@
 # Feature Tree
 
-Two parallel trees for Claude Code: **Features** (atomic code units) and **Workflows** (user-facing experiences).
+A semantic layer connecting human intent and AI implementation.
 
-## Why?
+## The Problem
 
-The bottleneck shifted from implementation to specification.
+AI handles implementation. Humans move to abstract levels (product vision, taste, specification). But there's no unified protocol connecting them.
 
-| Features only | Workflows only | Both |
-|---------------|----------------|------|
-| Technically correct | Clear user intent | Modify a feature → see which workflows break |
-| UX is accidental | Implementation gaps | Design a workflow → see what exists vs. needs building |
+**The gap:**
+- Context window limits what AI can hold
+- Human thinks "what should exist" / AI thinks "what code to write"
+- No shared language between product intent and code structure
+- Sessions restart cold, losing accumulated understanding
+
+## The Solution
+
+Two parallel trees that speak both human and AI:
+
+| Tree | Speaks to | Contains |
+|------|-----------|----------|
+| **Features** | AI (code) | Symbols, files, technical notes |
+| **Workflows** | Human (product) | User journeys, flows, dependencies |
+
+The explicit mapping between them is the protocol:
+- Modify a feature → see which workflows break
+- Design a workflow → see what features exist vs. need building
 
 ## Core Concepts
 
