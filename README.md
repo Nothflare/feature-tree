@@ -38,11 +38,20 @@ Without tracking: Claude guesses → inconsistent code → hours debugging.
 
 ### Workflows
 
-Workflows compose features into user-facing experiences:
+Workflows compose features into user-facing experiences. Two types:
+
+| Type | What it is | Example |
+|------|------------|---------|
+| **Journey** | User goal (the "why") | "New user becomes paying customer" |
+| **Flow** | Steps to achieve (the "how") | "Signup flow", "Checkout flow" |
 
 ```
-Login Flow depends on → [TURNSTILE.Verify, AUTH.Login, DB.Session]
+Journey: User Onboarding
+  └── Flow: Signup Flow      → depends on [AUTH.Register, EMAIL.Verify]
+  └── Flow: First Purchase   → depends on [CART.Add, PAYMENT.Stripe]
 ```
+
+Journeys contain flows. Flows reference features.
 
 ## Installation
 
