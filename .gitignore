@@ -33,5 +33,6 @@ Thumbs.db
 # Project-specific user files
 .serena/
 .mcp.json
+.feat-tree/
 
 docs/plans/
