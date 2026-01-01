@@ -132,11 +132,11 @@ hard delete (no trace)    soft delete (recoverable)
 Human: Add user signup flow
 
 Claude: [search_features("signup")] - checking existing
-        [add_workflow(id="signup-flow", type="flow", depends_on=[...])]
-        [add_feature(id="auth-register", name="User Registration")]
+        [add_workflow(id="USER_ONBOARDING.signup", name="Signup Flow", depends_on=[...])]
+        [add_feature(id="AUTH.register", name="User Registration")]
 
         Implementing...
-        [update_feature(id="auth-register", status="in-progress",
+        [update_feature(id="AUTH.register", status="in-progress",
                        code_symbols=["registerUser"], files=["src/auth/register.ts"])]
 ```
 

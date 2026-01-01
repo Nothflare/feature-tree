@@ -29,7 +29,7 @@ def generate_features_markdown(db: FeatureDB) -> str:
 def generate_workflows_markdown(db: FeatureDB) -> str:
     """Generate WORKFLOWS.md content with mermaid diagrams."""
     workflows = db.execute(
-        "SELECT * FROM workflows WHERE status != 'deleted' ORDER BY type, id"
+        "SELECT * FROM workflows WHERE status != 'deleted' ORDER BY id"
     ).fetchall()
     workflows = [dict(w) for w in workflows]
 
@@ -138,7 +138,7 @@ def render_workflow(workflow: dict, level: int, db: FeatureDB) -> list[str]:
         lines.append("```")
         lines.append("")
 
-    # Children (flows under journey)
+    # Children
     for child in workflow.get("children", []):
         lines.extend(render_workflow(child, level + 1, db))
 

@@ -21,11 +21,11 @@ Examples:
 - "Checkout flow from cart to payment"
 - "Admin creates new product"
 
-List them (one per line), or describe a journey with multiple flows.
+Use ID hierarchy: PARENT.child (e.g., USER_ONBOARDING.signup)
 ```
 
 For each workflow, clarify:
-- Is this a **journey** (user goal) or **flow** (specific steps)?
+- Parent workflow ID (if nested)
 - Entry point if known (optional)
 
 ### Step 2: Parallel Scanning
@@ -45,7 +45,7 @@ Your job:
 4. Stop at external boundaries (DB, APIs) - these are atomic features
 
 For each feature found, record:
-- id: kebab-case identifier (e.g., "auth-email-verify")
+- id: Use hierarchy like AUTH.register, PAYMENT.stripe
 - name: Human readable name
 - files: List of files involved
 - code_symbols: Key functions/classes
@@ -55,11 +55,10 @@ Return JSON:
   "workflow": {{
     "id": "{workflow_id}",
     "name": "{workflow_name}",
-    "type": "flow",
-    "depends_on": ["feature-id-1", "feature-id-2", ...]
+    "depends_on": ["AUTH.register", "AUTH.email_verify", ...]
   }},
   "features": [
-    {{"id": "...", "name": "...", "files": [...], "code_symbols": [...]}},
+    {{"id": "AUTH.register", "name": "User Registration", "files": [...], "code_symbols": [...]}},
     ...
   ]
 }}
@@ -83,21 +82,19 @@ Show the user:
 ```markdown
 ## Discovered Workflows
 
-### 1. User Signup Flow
-- **Type:** flow
-- **Depends on:** auth-register, auth-email-verify, db-user-create
+### USER_ONBOARDING.signup
+- **Depends on:** AUTH.register, AUTH.email_verify, DB.user_create
 
-### 2. Checkout Flow
-- **Type:** flow
-- **Depends on:** cart-get, payment-stripe, order-create
+### CHECKOUT.payment
+- **Depends on:** CART.get, PAYMENT.stripe, ORDER.create
 
 ## Discovered Features
 
 | ID | Name | Files |
 |----|------|-------|
-| auth-register | User Registration | src/auth/register.ts |
-| auth-email-verify | Email Verification | src/auth/verify.ts |
-| payment-stripe | Stripe Payment | src/payment/stripe.ts |
+| AUTH.register | User Registration | src/auth/register.ts |
+| AUTH.email_verify | Email Verification | src/auth/verify.ts |
+| PAYMENT.stripe | Stripe Payment | src/payment/stripe.ts |
 ...
 
 **Review:**
@@ -116,20 +113,20 @@ After user approval:
 
 ```python
 # For each new feature
-add_feature(id="auth-register", name="User Registration", description="...")
+add_feature(id="AUTH.register", name="User Registration", description="...")
 
 # For each workflow
 add_workflow(
-    id="signup-flow",
-    name="User Signup Flow",
-    type="flow",
-    depends_on=["auth-register", "auth-email-verify", "db-user-create"]
+    id="USER_ONBOARDING.signup",
+    name="Signup Flow",
+    depends_on=["AUTH.register", "AUTH.email_verify", "DB.user_create"]
 )
 ```
 
 ## Guidelines
 
 - **Atomic features**: "Calls Stripe API" is one feature, don't decompose further
+- **ID hierarchy**: Use PARENT.child format for both features and workflows
 - **Deduplication**: Check before creating - same feature may appear in multiple workflows
 - **Files + Symbols**: Always record which files and code symbols implement a feature
 - **User guides**: If Claude can't find entry point, ask user for hints
