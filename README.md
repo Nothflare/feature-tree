@@ -52,20 +52,14 @@ Without tracking: Claude guesses → inconsistent code → hours debugging.
 
 ### Workflows
 
-Workflows compose features into user-facing experiences. Two types:
+Workflows = user-facing experiences, structured like features.
 
-| Type | What it is | Example |
-|------|------------|---------|
-| **Journey** | User goal (the "why") | "New user becomes paying customer" |
-| **Flow** | Steps to achieve (the "how") | "Signup flow", "Checkout flow" |
-
+Use ID hierarchy (same as features):
 ```
-Journey: User Onboarding
-  └── Flow: Signup Flow      → depends on [AUTH.Register, EMAIL.Verify]
-  └── Flow: First Purchase   → depends on [CART.Add, PAYMENT.Stripe]
+USER_ONBOARDING              → journey (parent)
+USER_ONBOARDING.signup       → flow (child) → depends on [AUTH.register, AUTH.email_verify]
+USER_ONBOARDING.first_buy    → flow (child) → depends on [CART.add, PAYMENT.stripe]
 ```
-
-Journeys contain flows. Flows reference features.
 
 ## Installation
 
@@ -99,9 +93,9 @@ Journeys contain flows. Flows reference features.
 
 | Tool | Description |
 |------|-------------|
-| `search_workflows(query)` | Fuzzy search journeys/flows |
+| `search_workflows(query)` | Fuzzy search |
 | `get_workflow(id)` | Full details + linked features |
-| `add_workflow(id, name, type, depends_on?, mermaid?)` | Create journey or flow |
+| `add_workflow(id, name, depends_on?, mermaid?)` | Create workflow |
 | `update_workflow(id, ...)` | Update status, depends_on, mermaid |
 | `delete_workflow(id)` | Hard if planned, soft if in-progress/done |
 

@@ -43,10 +43,13 @@ DO NOT skip this. It's what keeps the codebase flexible as it grows.
 
 ## WORKFLOWS
 
-Workflows are user-facing experiences composed from features.
-They answer: "What does the user actually do?"
+Workflows = user-facing experiences, structured like features.
 
-Example: Login Flow depends on [TURNSTILE.Verify, AUTH.Login, DB.Session]
+Use ID hierarchy: `USER_ONBOARDING.signup` (parent.child, like features)
+- Parent = journey (category)
+- Child = flow (atomic)
+
+Example: `USER_ONBOARDING.signup` depends on [AUTH.register, AUTH.email_verify]
 
 Why both trees?
 - Features only → technically correct but UX is accidental
@@ -195,7 +198,7 @@ def get_feature(id: str) -> str:
             # Add linked workflows
             workflows = db.get_workflows_for_feature(id)
             feature["linked_workflows"] = [
-                {"id": w["id"], "name": w["name"], "type": w["type"]}
+                {"id": w["id"], "name": w["name"]}
                 for w in workflows
             ]
             return json.dumps(feature, default=str)
@@ -221,12 +224,12 @@ def delete_feature(id: str) -> str:
 
 @mcp.tool()
 def search_workflows(query: str) -> str:
-    """Fuzzy search workflows (journeys/flows) by name, description, or purpose."""
+    """Fuzzy search workflows by name, description, or purpose."""
     db = get_db()
     try:
         results = db.search_workflows(query)
         trimmed = [
-            {"id": r["id"], "name": r["name"], "type": r["type"], "status": r["status"], "parent_id": r.get("parent_id")}
+            {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
             for r in results
         ]
         return json.dumps(trimmed)
@@ -238,18 +241,17 @@ def search_workflows(query: str) -> str:
 def add_workflow(
     id: str,
     name: str,
-    type: str,
     parent_id: str | None = None,
     description: str | None = None,
     purpose: str | None = None,
     depends_on: list[str] | None = None,
     mermaid: str | None = None
 ) -> str:
-    """Create a workflow. type='journey' for user goals, type='flow' for steps. depends_on links to feature IDs."""
+    """Create a workflow. Use ID hierarchy: JOURNEY.flow (like features). depends_on links to feature IDs."""
     db = get_db()
     try:
         result = db.add_workflow(
-            id=id, name=name, type=type, parent_id=parent_id,
+            id=id, name=name, parent_id=parent_id,
             description=description, purpose=purpose,
             depends_on=depends_on, mermaid=mermaid
         )

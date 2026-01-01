@@ -110,9 +110,8 @@ def render_workflow(workflow: dict, level: int, db: FeatureDB) -> list[str]:
     lines = []
     prefix = "#" * level
 
-    # Header with type badge
-    type_badge = "🎯" if workflow["type"] == "journey" else "→"
-    lines.append(f"{prefix} {type_badge} {workflow['id']}")
+    # Header
+    lines.append(f"{prefix} {workflow['id']}")
     lines.append(f"**{workflow['name']}**")
 
     if workflow.get("purpose"):
@@ -122,7 +121,6 @@ def render_workflow(workflow: dict, level: int, db: FeatureDB) -> list[str]:
     lines.append("")
 
     # Metadata
-    lines.append(f"- **Type:** {workflow['type']}")
     lines.append(f"- **Status:** {workflow['status']}")
 
     # Linked features

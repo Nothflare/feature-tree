@@ -34,12 +34,11 @@ class FeatureDB:
                 id, name, description, technical_notes
             );
 
-            -- Workflows: journeys and flows
+            -- Workflows: user-facing experiences (same structure as features)
             CREATE TABLE IF NOT EXISTS workflows (
                 id            TEXT PRIMARY KEY,
                 parent_id     TEXT REFERENCES workflows(id),
                 name          TEXT NOT NULL,
-                type          TEXT NOT NULL CHECK(type IN ('journey', 'flow')),
                 description   TEXT,
                 purpose       TEXT,
                 depends_on    TEXT,
@@ -209,21 +208,18 @@ class FeatureDB:
         self,
         id: str,
         name: str,
-        type: str,
         parent_id: Optional[str] = None,
         description: Optional[str] = None,
         purpose: Optional[str] = None,
         depends_on: Optional[list[str]] = None,
         mermaid: Optional[str] = None
     ) -> dict:
-        if type not in ("journey", "flow"):
-            return {"ok": False, "error": "type must be 'journey' or 'flow'"}
         now = datetime.now(UTC).isoformat()
         depends_json = json.dumps(depends_on) if depends_on else None
         self.conn.execute(
-            """INSERT INTO workflows (id, parent_id, name, type, description, purpose, depends_on, mermaid, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (id, parent_id, name, type, description, purpose, depends_json, mermaid, now, now)
+            """INSERT INTO workflows (id, parent_id, name, description, purpose, depends_on, mermaid, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, parent_id, name, description, purpose, depends_json, mermaid, now, now)
         )
         self._sync_workflow_fts(id)
         self.conn.commit()
