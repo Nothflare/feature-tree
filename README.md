@@ -61,6 +61,23 @@ USER_ONBOARDING.signup       → flow (child) → depends on [AUTH.register, AUT
 USER_ONBOARDING.first_buy    → flow (child) → depends on [CART.add, PAYMENT.stripe]
 ```
 
+### Infrastructure
+
+Shared utilities (rate limiters, caching, logging) use the `INFRA.*` naming convention:
+
+```
+INFRA.rate_limiter     → shared infrastructure
+INFRA.redis_cache      → shared infrastructure
+AUTH.login             → feature that uses [INFRA.rate_limiter, INFRA.redis_cache]
+```
+
+Features can declare `uses` to link to infrastructure (or other features):
+- `update_feature(id="AUTH.login", uses=["INFRA.rate_limiter"])`
+- `get_feature("AUTH.login")` shows `uses_features` (forward lookup)
+- `get_feature("INFRA.rate_limiter")` shows `used_by_features` (reverse lookup)
+
+No separate type field - just features with `INFRA.*` IDs.
+
 ## Installation
 
 ```bash
@@ -84,9 +101,9 @@ USER_ONBOARDING.first_buy    → flow (child) → depends on [CART.add, PAYMENT.
 | Tool | Description |
 |------|-------------|
 | `search_features(query)` | Fuzzy search, trimmed output |
-| `get_feature(id)` | Full details + linked workflows |
-| `add_feature(id, name, ...)` | Create atomic feature |
-| `update_feature(id, ...)` | Track symbols, files, commits, status |
+| `get_feature(id)` | Full details + linked workflows + uses |
+| `add_feature(id, name, uses?, ...)` | Create atomic feature |
+| `update_feature(id, uses?, ...)` | Track symbols, files, commits, status, uses |
 | `delete_feature(id)` | Hard if planned, soft if in-progress/done |
 
 ### Workflows

@@ -25,6 +25,7 @@ class FeatureDB:
                 files         TEXT,
                 technical_notes TEXT,
                 commit_ids    TEXT,
+                uses          TEXT,
                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -85,13 +86,15 @@ class FeatureDB:
         name: str,
         parent_id: Optional[str] = None,
         description: Optional[str] = None,
+        uses: Optional[list[str]] = None,
         status: str = "planned"
     ) -> dict:
         now = datetime.now(UTC).isoformat()
+        uses_json = json.dumps(uses) if uses else None
         self.conn.execute(
-            """INSERT INTO features (id, parent_id, name, description, status, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (id, parent_id, name, description, status, now, now)
+            """INSERT INTO features (id, parent_id, name, description, uses, status, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, parent_id, name, description, uses_json, status, now, now)
         )
         self._sync_fts(id)
         self.conn.commit()
@@ -108,7 +111,7 @@ class FeatureDB:
             return self.get_feature(id)
 
         # Convert lists to JSON
-        for key in ["code_symbols", "files", "commit_ids"]:
+        for key in ["code_symbols", "files", "commit_ids", "uses"]:
             if key in fields and isinstance(fields[key], list):
                 fields[key] = json.dumps(fields[key])
 
@@ -124,6 +127,19 @@ class FeatureDB:
         self._sync_fts(id)
         self.conn.commit()
         return self.get_feature(id)
+
+    def get_features_using(self, feature_id: str) -> list[dict]:
+        """Get features that use this feature (reverse lookup)."""
+        rows = self.conn.execute(
+            "SELECT * FROM features WHERE status != 'deleted'"
+        ).fetchall()
+        result = []
+        for row in rows:
+            f = dict(row)
+            uses = json.loads(f.get("uses") or "[]")
+            if feature_id in uses:
+                result.append(f)
+        return result
 
     def get_children(self, id: str) -> list[dict]:
         """Get direct children of a feature."""

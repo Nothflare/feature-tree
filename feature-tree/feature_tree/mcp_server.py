@@ -56,6 +56,16 @@ Why both trees?
 - Workflows only → clear intent but implementation gaps
 - Both → modify a feature, see which workflows break. Design a workflow, see what features exist vs. need building.
 
+## INFRASTRUCTURE
+
+Use naming convention `INFRA.*` for shared utilities (rate limiter, cache, etc.)
+
+Features can declare `uses` to link to other features they depend on:
+- AUTH.login uses [INFRA.rate_limiter]
+- get_feature shows both `uses_features` and `used_by_features`
+
+No separate "infra type" - just features with INFRA.* IDs.
+
 ## Tools
 
 Features: search_features, get_feature, add_feature, update_feature, delete_feature
@@ -128,10 +138,14 @@ def search_features(query: str) -> str:
     try:
         results = db.search_features(query)
         # Trim to essential fields only
-        trimmed = [
-            {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
-            for r in results
-        ]
+        trimmed = []
+        for r in results:
+            item = {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
+            if r.get("uses"):
+                uses_list = json.loads(r["uses"])
+                if uses_list:
+                    item["uses_count"] = len(uses_list)
+            trimmed.append(item)
         return json.dumps(trimmed)
     finally:
         db.close()
@@ -142,12 +156,13 @@ def add_feature(
     id: str,
     name: str,
     parent_id: str | None = None,
-    description: str | None = None
+    description: str | None = None,
+    uses: list[str] | None = None
 ) -> str:
     """Create a new feature. Use when human describes something new."""
     db = get_db()
     try:
-        db.add_feature(id=id, name=name, parent_id=parent_id, description=description)
+        db.add_feature(id=id, name=name, parent_id=parent_id, description=description, uses=uses)
         regenerate_markdown()
         return '{"ok":true}'
     finally:
@@ -162,7 +177,8 @@ def update_feature(
     files: list[str] | None = None,
     commit_ids: list[str] | None = None,
     technical_notes: str | None = None,
-    description: str | None = None
+    description: str | None = None,
+    uses: list[str] | None = None
 ) -> str:
     """Update a feature. ALWAYS record code_symbols + files after implementing. 1x effort now = 10x saved later."""
     db = get_db()
@@ -180,6 +196,8 @@ def update_feature(
             fields["technical_notes"] = technical_notes
         if description is not None:
             fields["description"] = description
+        if uses is not None:
+            fields["uses"] = uses
 
         db.update_feature(id, **fields)
         regenerate_markdown()
@@ -190,7 +208,7 @@ def update_feature(
 
 @mcp.tool()
 def get_feature(id: str) -> str:
-    """Get full details of a single feature by ID, including linked workflows."""
+    """Get full details of a single feature by ID, including linked workflows and used features."""
     db = get_db()
     try:
         feature = db.get_feature(id)
@@ -201,6 +219,24 @@ def get_feature(id: str) -> str:
                 {"id": w["id"], "name": w["name"]}
                 for w in workflows
             ]
+
+            # Add features this feature uses (forward lookup)
+            if feature.get("uses"):
+                uses_ids = json.loads(feature["uses"])
+                feature["uses_features"] = [
+                    {"id": f["id"], "name": f["name"]}
+                    for uid in uses_ids
+                    if (f := db.get_feature(uid))
+                ]
+
+            # Add features that use this feature (reverse lookup)
+            used_by = db.get_features_using(id)
+            if used_by:
+                feature["used_by_features"] = [
+                    {"id": f["id"], "name": f["name"]}
+                    for f in used_by
+                ]
+
             return json.dumps(feature, default=str)
         return '{"ok":false,"error":"not found"}'
     finally:
