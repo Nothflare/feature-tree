@@ -1,6 +1,6 @@
 {
   "name": "feature-tree",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "AI-driven feature management for Claude Code. Track features, link to code symbols and commits, maintain living documentation.",
   "author": {
     "name": "Feature Tree Contributors"

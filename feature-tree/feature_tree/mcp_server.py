@@ -123,6 +123,23 @@ def regenerate_markdown():
     db.close()
 
 
+def log_bootstrap(message: str, category: str = "INFO"):
+    """Append a timestamped entry to bootstrap-log.md"""
+    from datetime import datetime, UTC
+    feat_tree_dir = get_feat_tree_dir()
+    log_path = feat_tree_dir / "bootstrap-log.md"
+    
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    # Create file with header if it doesn't exist
+    if not log_path.exists():
+        log_path.write_text(f"# Bootstrap Log\n\nStarted: {timestamp}\n\n", encoding="utf-8")
+    
+    # Append entry
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(f"- [{timestamp}] [{category}] {message}\n")
+
+
 @mcp.tool()
 def debug_cwd() -> str:
     """Returns path info for debugging."""
@@ -145,6 +162,8 @@ def search_features(query: str) -> str:
                 uses_list = json.loads(r["uses"])
                 if uses_list:
                     item["uses_count"] = len(uses_list)
+            if r.get("confidence"):
+                item["confidence"] = r["confidence"]
             trimmed.append(item)
         return json.dumps(trimmed)
     finally:
@@ -157,12 +176,13 @@ def add_feature(
     name: str,
     parent_id: str | None = None,
     description: str | None = None,
-    uses: list[str] | None = None
+    uses: list[str] | None = None,
+    confidence: str | None = None
 ) -> str:
     """Create a new feature. Use when human describes something new."""
     db = get_db()
     try:
-        db.add_feature(id=id, name=name, parent_id=parent_id, description=description, uses=uses)
+        db.add_feature(id=id, name=name, parent_id=parent_id, description=description, uses=uses, confidence=confidence)
         regenerate_markdown()
         return '{"ok":true}'
     finally:
@@ -178,7 +198,8 @@ def update_feature(
     commit_ids: list[str] | None = None,
     technical_notes: str | None = None,
     description: str | None = None,
-    uses: list[str] | None = None
+    uses: list[str] | None = None,
+    confidence: str | None = None
 ) -> str:
     """Update a feature. ALWAYS record code_symbols + files after implementing. 1x effort now = 10x saved later."""
     db = get_db()
@@ -198,6 +219,8 @@ def update_feature(
             fields["description"] = description
         if uses is not None:
             fields["uses"] = uses
+        if confidence is not None:
+            fields["confidence"] = confidence
 
         db.update_feature(id, **fields)
         regenerate_markdown()
@@ -264,10 +287,12 @@ def search_workflows(query: str) -> str:
     db = get_db()
     try:
         results = db.search_workflows(query)
-        trimmed = [
-            {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
-            for r in results
-        ]
+        trimmed = []
+        for r in results:
+            item = {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
+            if r.get("confidence"):
+                item["confidence"] = r["confidence"]
+            trimmed.append(item)
         return json.dumps(trimmed)
     finally:
         db.close()
@@ -281,7 +306,8 @@ def add_workflow(
     description: str | None = None,
     purpose: str | None = None,
     depends_on: list[str] | None = None,
-    mermaid: str | None = None
+    mermaid: str | None = None,
+    confidence: str | None = None
 ) -> str:
     """Create a workflow. Use ID hierarchy: JOURNEY.flow (like features). depends_on links to feature IDs."""
     db = get_db()
@@ -289,7 +315,8 @@ def add_workflow(
         result = db.add_workflow(
             id=id, name=name, parent_id=parent_id,
             description=description, purpose=purpose,
-            depends_on=depends_on, mermaid=mermaid
+            depends_on=depends_on, mermaid=mermaid,
+            confidence=confidence
         )
         regenerate_markdown()
         return json.dumps(result)
@@ -323,7 +350,8 @@ def update_workflow(
     depends_on: list[str] | None = None,
     mermaid: str | None = None,
     description: str | None = None,
-    purpose: str | None = None
+    purpose: str | None = None,
+    confidence: str | None = None
 ) -> str:
     """Update a workflow's fields."""
     db = get_db()
@@ -339,6 +367,8 @@ def update_workflow(
             fields["description"] = description
         if purpose is not None:
             fields["purpose"] = purpose
+        if confidence is not None:
+            fields["confidence"] = confidence
 
         db.update_workflow(id, **fields)
         regenerate_markdown()
@@ -358,6 +388,15 @@ def delete_workflow(id: str) -> str:
         return json.dumps(result)
     finally:
         db.close()
+
+
+
+# Bootstrap logging tool
+@mcp.tool()
+def bootstrap_log(message: str, category: str = "INFO") -> str:
+    """Log a bootstrap action. Categories: MODULE_DETECT, FEATURE_CREATE, WORKFLOW_CREATE, CONFLICT, INFO"""
+    log_bootstrap(message, category)
+    return '{"ok":true}'
 
 
 def main():

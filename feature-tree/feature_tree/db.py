@@ -26,6 +26,7 @@ class FeatureDB:
                 technical_notes TEXT,
                 commit_ids    TEXT,
                 uses          TEXT,
+                confidence    TEXT,
                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -45,6 +46,7 @@ class FeatureDB:
                 depends_on    TEXT,
                 mermaid       TEXT,
                 status        TEXT DEFAULT 'planned',
+                confidence    TEXT,
                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -54,6 +56,18 @@ class FeatureDB:
             );
         """)
         self.conn.commit()
+        
+        # Migrate existing databases: add confidence column if missing
+        self._migrate_add_column("features", "confidence", "TEXT")
+        self._migrate_add_column("workflows", "confidence", "TEXT")
+
+    def _migrate_add_column(self, table: str, column: str, col_type: str):
+        """Add column to existing table if it doesn't exist."""
+        cursor = self.conn.execute(f"PRAGMA table_info({table})")
+        columns = [row[1] for row in cursor.fetchall()]
+        if column not in columns:
+            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+            self.conn.commit()
 
     def _sync_fts(self, feature_id: str, delete_only: bool = False):
         """Sync a single feature to FTS index."""
@@ -87,14 +101,15 @@ class FeatureDB:
         parent_id: Optional[str] = None,
         description: Optional[str] = None,
         uses: Optional[list[str]] = None,
+        confidence: Optional[str] = None,
         status: str = "planned"
     ) -> dict:
         now = datetime.now(UTC).isoformat()
         uses_json = json.dumps(uses) if uses else None
         self.conn.execute(
-            """INSERT INTO features (id, parent_id, name, description, uses, status, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (id, parent_id, name, description, uses_json, status, now, now)
+            """INSERT INTO features (id, parent_id, name, description, uses, confidence, status, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, parent_id, name, description, uses_json, confidence, status, now, now)
         )
         self._sync_fts(id)
         self.conn.commit()
@@ -228,14 +243,15 @@ class FeatureDB:
         description: Optional[str] = None,
         purpose: Optional[str] = None,
         depends_on: Optional[list[str]] = None,
-        mermaid: Optional[str] = None
+        mermaid: Optional[str] = None,
+        confidence: Optional[str] = None
     ) -> dict:
         now = datetime.now(UTC).isoformat()
         depends_json = json.dumps(depends_on) if depends_on else None
         self.conn.execute(
-            """INSERT INTO workflows (id, parent_id, name, description, purpose, depends_on, mermaid, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (id, parent_id, name, description, purpose, depends_json, mermaid, now, now)
+            """INSERT INTO workflows (id, parent_id, name, description, purpose, depends_on, mermaid, confidence, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, parent_id, name, description, purpose, depends_json, mermaid, confidence, now, now)
         )
         self._sync_workflow_fts(id)
         self.conn.commit()
