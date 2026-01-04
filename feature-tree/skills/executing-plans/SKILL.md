@@ -40,30 +40,98 @@ This skill expects a design doc with:
 
 **Critical:** If the design feels wrong or incomplete, STOP. Go back to brainstorming. Don't proceed with a flawed design.
 
-### Step 2: Plan Batches
+### Step 2: Identify Layers
 
-Group tasks into batches of 2-4 related features:
+**Before batching, categorize every task by layer.**
+
+Projects have natural layers that build on each other:
 
 ```
-Batch 1: Foundation
-- Task 1: INFRA.database setup
-- Task 2: INFRA.config management
+Layer 0: Project Setup
+├── Create project structure
+├── Install dependencies
+├── Configure build tools
+├── Set up testing framework
+├── Initialize git, linting, formatting
 
-Batch 2: Core Feature
-- Task 3: AUTH.login
-- Task 4: AUTH.session
+Layer 1: Infrastructure (INFRA.*)
+├── Database connection/setup
+├── Config management
+├── Logging
+├── Error handling
+├── Shared utilities
 
-Batch 3: Secondary Features
-- Task 5: USER.profile
-- Task 6: USER.settings
+Layer 2: Core Features
+├── The main thing the app does
+├── What makes this app unique
+├── Primary user-facing capabilities
+
+Layer 3: Supporting Features
+├── User management
+├── Settings
+├── Admin tools
+├── Secondary capabilities
+
+Layer 4: Polish
+├── Performance optimization
+├── UI refinement
+├── Edge case handling
+├── Error messages
 ```
 
-**Batch rules:**
-- Features in a batch should be related or have shared dependencies
-- Each batch should be independently testable
-- Later batches can depend on earlier batches, never reverse
+**Write out the layer assignment:**
 
-### Step 3: Execute Batch
+```
+Layer 0 (Setup):
+- Create React project
+- Install dependencies
+- Configure TypeScript
+
+Layer 1 (Infrastructure):
+- INFRA.database
+- INFRA.config
+- INFRA.logger
+
+Layer 2 (Core):
+- AUTH.login
+- AUTH.session
+- PAYMENT.checkout
+
+Layer 3 (Supporting):
+- USER.profile
+- USER.settings
+```
+
+### Step 3: Plan Batches
+
+**CRITICAL RULE: Tasks from different layers should NEVER be in the same batch.**
+
+Group tasks into batches following these rules:
+
+1. **Same layer only** — All tasks in a batch must be from the same layer
+2. **Similar scope** — Tasks should be roughly the same size
+3. **Related functionality** — Tasks that share dependencies or concepts
+4. **Independently testable** — After the batch, you can verify it works
+
+**Good batches:**
+
+| Batch | Tasks | Why It Works |
+|-------|-------|--------------|
+| Setup | Create project, install deps, configure build | All Layer 0, all setup |
+| Infrastructure | Database, config, logger | All Layer 1 INFRA |
+| Core Auth | Login, session, middleware | All Layer 2, all auth-related |
+| User Features | Profile, settings | All Layer 3, all user-related |
+
+**Bad batches (NEVER DO THIS):**
+
+| Bad Batch | Why It's Wrong |
+|-----------|---------------|
+| "Set up project" + "Implement login handler" | Layer 0 + Layer 2 mixed |
+| "Install React" + "Style the navbar" | Setup + Polish mixed |
+| "Add database" + "Add checkout flow" | Infrastructure + Core feature mixed |
+| "Login" + "Checkout" + "Profile" | Unrelated features, too scattered |
+
+### Step 4: Execute Batch
 
 For each task in the batch:
 
@@ -71,82 +139,63 @@ For each task in the batch:
 2. **Implement the feature**
    - Follow TDD: write test first, then implementation
    - Keep changes focused on this feature only
-3. **Update Feature Tree**
-   ```
-   update_feature(
-       id="AUTH.login",
-       status="in-progress",
-       files=["src/auth/login.ts"],
-       code_symbols=["handleLogin", "validateCredentials"]
-   )
-   ```
-4. **Run tests** for this feature
-5. **Mark as completed** in TodoWrite
+3. **Run tests** for this feature
+4. **Mark as completed** in TodoWrite
 
-### Step 4: Batch Checkpoint
+### Step 5: Batch Checkpoint
 
-After completing a batch:
+After completing all tasks in a batch:
 
 1. **Run all tests** (not just the batch)
    ```bash
-   # Run full test suite
    pytest  # or npm test, etc.
    ```
 
-2. **Commit the batch**
-   ```bash
-   git add -A
-   git commit -m "feat: implement [batch description]
+2. **Use /feature-tree:commit**
 
-   Features:
-   - AUTH.login
-   - AUTH.session
+   **REQUIRED:** Use the `/feature-tree:commit` command to:
+   - Commit all changes with descriptive message
+   - Update Feature Tree entries (files, symbols, status → done)
+   - Record commit hash in Feature Tree
 
-   Tests: all passing"
+   This handles both git commit AND Feature Tree updates in one step.
+
+3. **Report to user**
    ```
+   Batch 1 (Layer 0 - Setup) complete:
+   - ✅ Create React project
+   - ✅ Install dependencies
+   - ✅ Configure TypeScript
 
-3. **Update Feature Tree status**
-   ```
-   update_feature(id="AUTH.login", status="done")
-   update_feature(id="AUTH.session", status="done")
-   ```
-
-4. **Report to user**
-   ```
-   Batch 1 complete:
-   - ✅ INFRA.database setup
-   - ✅ INFRA.config management
-
-   Tests: 12/12 passing
+   Tests: 3/3 passing
    Committed: abc1234
+   Feature Tree updated.
 
-   Ready for feedback before continuing to Batch 2.
+   Ready for feedback before continuing to Batch 2 (Layer 1 - Infrastructure).
    ```
 
-5. **Wait for user feedback** before proceeding
+4. **Wait for user feedback** before proceeding
 
-### Step 5: Continue or Adjust
+### Step 6: Continue or Adjust
 
 Based on user feedback:
 - **Continue:** Proceed to next batch
-- **Adjust:** Modify implementation based on feedback, re-test, re-commit
+- **Adjust:** Modify implementation based on feedback, re-test, use /feature-tree:commit again
 - **Pause:** User wants to review more, wait for them
 
-### Step 6: Complete
+### Step 7: Complete
 
 After all batches:
 
 1. **Run full test suite** one final time
-2. **Verify all Feature Tree entries** are updated to "done"
-3. **Report completion**
+2. **Report completion**
    ```
    Implementation complete:
 
-   Features implemented:
-   - AUTH.login (done)
-   - AUTH.session (done)
-   - USER.profile (done)
-   - USER.settings (done)
+   Layer 0 (Setup): ✅
+   Layer 1 (Infrastructure): ✅
+   Layer 2 (Core Features): ✅
+   Layer 3 (Supporting Features): ✅
 
    All tests passing: 47/47
    Commits: 4 (one per batch)
@@ -156,62 +205,17 @@ After all batches:
 
 ---
 
-## Feature Tree Integration
+## Layer Execution Order
 
-### During Implementation
-
-Update Feature Tree entries as you work:
-
-```python
-# Starting a feature
-update_feature(id="AUTH.login", status="in-progress")
-
-# As you implement
-update_feature(
-    id="AUTH.login",
-    files=["src/auth/login.ts", "src/auth/validators.ts"],
-    code_symbols=["handleLogin", "validateCredentials", "LoginRequest"]
-)
-
-# After tests pass
-update_feature(id="AUTH.login", status="done")
-```
-
-### After Each Batch
-
-Verify Feature Tree state matches reality:
-- All implemented features marked "done"
-- Files and symbols recorded
-- Dependencies (uses) properly linked
-
----
-
-## Commit Strategy
-
-### One Commit Per Batch
-
-Each batch gets one commit containing:
-- All feature implementations in the batch
-- All tests for those features
-- Feature Tree updates happen via MCP tools (not in commit)
-
-### Commit Message Format
+**Layers must be executed in order.** You cannot implement Layer 2 before Layer 1 is complete.
 
 ```
-feat: [batch description]
-
-Features:
-- FEATURE.one - [brief description]
-- FEATURE.two - [brief description]
-
-Tests: [X] passing
+Layer 0 → Layer 1 → Layer 2 → Layer 3 → Layer 4
+  ↓         ↓         ↓         ↓         ↓
+Setup → Infra → Core → Support → Polish
 ```
 
-### When to NOT Commit
-
-- Tests are failing
-- Implementation is incomplete
-- User hasn't approved the batch
+If a task depends on something from a higher layer that doesn't exist yet, STOP and go back to design.
 
 ---
 
@@ -223,12 +227,14 @@ Tests: [X] passing
 - The design doc is ambiguous
 - You realize the design is flawed
 - User feedback indicates a problem
+- You're tempted to mix layers in a batch
 
 **Don't:**
 - Push through blockers
 - Guess when uncertain
 - Skip tests to "fix later"
 - Implement features not in the plan
+- Mix different layers in one batch
 
 ---
 
@@ -236,11 +242,14 @@ Tests: [X] passing
 
 **Never:**
 - One-shot the entire project (always batch)
-- Skip the commit between batches
+- Mix tasks from different layers in one batch
+- Skip /feature-tree:commit between batches
 - Continue after test failures
-- Implement without updating Feature Tree
 - Skip user checkpoints between batches
 - Commit without running tests
+
+**If you're tempted to batch "setup + feature":**
+STOP. That's wrong. Setup is Layer 0, features are Layer 2+. They cannot be in the same batch.
 
 **If tests fail:**
 1. Stop and diagnose
@@ -264,56 +273,65 @@ User: "Implement the auth system from the design doc"
 Claude: I'm using the feature-tree:executing-plans skill to implement this design.
 
 [Read design doc]
-[Create TodoWrite with 6 tasks]
+[Create TodoWrite with 8 tasks]
 
-I've organized this into 3 batches:
+First, let me categorize by layer:
 
-Batch 1: Foundation (Tasks 1-2)
+Layer 0 (Setup):
+- Initialize project structure
+- Install dependencies
+
+Layer 1 (Infrastructure):
 - INFRA.database
 - INFRA.config
 
-Batch 2: Core Auth (Tasks 3-4)
+Layer 2 (Core Features):
 - AUTH.login
 - AUTH.session
+- AUTH.middleware
 
-Batch 3: User Management (Tasks 5-6)
+Layer 3 (Supporting):
 - USER.profile
-- USER.settings
 
-Starting Batch 1...
+I've organized this into 4 batches (one per layer):
 
-[Implement INFRA.database]
-[Write tests]
-[update_feature(id="INFRA.database", status="in-progress", files=[...])]
+Batch 1: Layer 0 - Setup
+- Initialize project structure
+- Install dependencies
+
+Batch 2: Layer 1 - Infrastructure
+- INFRA.database
+- INFRA.config
+
+Batch 3: Layer 2 - Core Auth
+- AUTH.login
+- AUTH.session
+- AUTH.middleware
+
+Batch 4: Layer 3 - User Features
+- USER.profile
+
+Starting Batch 1 (Layer 0 - Setup)...
+
+[Initialize project structure]
+[Install dependencies]
 [Run tests - passing]
-[Mark task complete]
-
-[Implement INFRA.config]
-[Write tests]
-[update_feature(id="INFRA.config", status="in-progress", files=[...])]
-[Run tests - passing]
-[Mark task complete]
-
-Batch 1 checkpoint:
-[Run full test suite - 8/8 passing]
-[git commit -m "feat: implement foundation (database, config)"]
-[update_feature(id="INFRA.database", status="done")]
-[update_feature(id="INFRA.config", status="done")]
+[Use /feature-tree:commit]
 
 ---
 
-Batch 1 complete:
-- ✅ INFRA.database
-- ✅ INFRA.config
+Batch 1 (Layer 0 - Setup) complete:
+- ✅ Initialize project structure
+- ✅ Install dependencies
 
-Tests: 8/8 passing
+Tests: passing
 Committed: abc1234
 
-Ready for feedback before continuing to Batch 2.
+Ready for feedback before continuing to Batch 2 (Layer 1 - Infrastructure).
 
-User: "Looks good, continue"
+User: "Continue"
 
-Claude: Starting Batch 2...
+Claude: Starting Batch 2 (Layer 1 - Infrastructure)...
 
 [Continue with same pattern]
 ```
@@ -326,8 +344,8 @@ Claude: Starting Batch 2...
 - `feature-tree:brainstorm` — Creates the design this skill executes
 
 **During execution:**
-- Update Feature Tree via MCP tools
-- Use TDD principles for each feature
+- `/feature-tree:commit` — **REQUIRED** after each batch (handles commit + FT updates)
+- TDD principles for each feature
 
 **After completion:**
 - Consider `ft-mem:handoff` if ending session
@@ -337,14 +355,16 @@ Claude: Starting Batch 2...
 
 ## Key Principles
 
-1. **Batch, don't one-shot** — Group related features, checkpoint between batches
+1. **Layer-based batching** — Categorize tasks by layer, never mix layers in a batch
 
-2. **Test before commit** — Never commit with failing tests
+2. **Layers execute in order** — Layer 0 → 1 → 2 → 3 → 4
 
-3. **Update Feature Tree** — Track progress in the system of record
+3. **Test before commit** — Never commit with failing tests
 
-4. **User checkpoints** — Get feedback between batches
+4. **/feature-tree:commit after each batch** — This is how Feature Tree stays in sync
 
-5. **Stop when blocked** — Don't push through problems
+5. **User checkpoints** — Get feedback between batches
 
-6. **Design is upstream** — If design is wrong, go back to brainstorming
+6. **Stop when blocked** — Don't push through problems
+
+7. **Design is upstream** — If design is wrong, go back to brainstorming
