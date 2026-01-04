@@ -100,29 +100,45 @@ No separate type field - just features with `INFRA.*` IDs.
 
 | Tool | Description |
 |------|-------------|
-| `search_features(query)` | Fuzzy search, trimmed output |
-| `get_feature(id)` | Full details + linked workflows + uses |
-| `add_feature(id, name, uses?, ...)` | Create atomic feature |
-| `update_feature(id, uses?, ...)` | Track symbols, files, commits, status, uses |
+| `search_features(query)` | Fuzzy search, shows confidence |
+| `get_feature(id)` | Full details + workflows + uses |
+| `add_feature(id, name, uses?, confidence?, ...)` | Create feature |
+| `update_feature(id, uses?, confidence?, ...)` | Track symbols, files, status |
 | `delete_feature(id)` | Hard if planned, soft if in-progress/done |
 
 ### Workflows
 
 | Tool | Description |
 |------|-------------|
-| `search_workflows(query)` | Fuzzy search |
+| `search_workflows(query)` | Fuzzy search, shows confidence |
 | `get_workflow(id)` | Full details + linked features |
-| `add_workflow(id, name, depends_on?, mermaid?)` | Create workflow |
-| `update_workflow(id, ...)` | Update status, depends_on, mermaid |
+| `add_workflow(id, name, depends_on?, mermaid?, confidence?)` | Create workflow |
+| `update_workflow(id, confidence?, ...)` | Update status, depends_on, mermaid |
 | `delete_workflow(id)` | Hard if planned, soft if in-progress/done |
 
-## Skills
+### Bootstrap
 
-| Skill | Description |
-|-------|-------------|
-| `/bootstrap` | Scan codebase by tracing workflows |
+| Tool | Description |
+|------|-------------|
+| `bootstrap_log(message, category)` | Append to bootstrap-log.md |
+
+## Skills & Commands
+
+### feature-tree
+
+| Skill/Command | Description |
+|---------------|-------------|
+| `/bootstrap` | Two-phase codebase analysis (features → workflows) |
+| `/brainstorm` | Workflow-first design with mind tools |
+| `/commit` | Commit with feature tree update |
+
+### ft-mem
+
+| Skill/Command | Description |
+|---------------|-------------|
 | `/ft-mem:onboarding` | First-time setup (CONTEXT.md + memories) |
 | `/ft-mem:handoff` | Save context before /clear |
+| `/ft-mem:brainstorm-sync` | Sync brainstorming discoveries to memory |
 
 ## Storage
 
