@@ -5,9 +5,19 @@ description: "Workflow-first design through collaborative dialogue. Use before c
 
 # Feature Tree Brainstorming
 
-Turn ideas into fully formed designs through collaborative dialogue. Focus on user experiences first, descend to implementation later.
+Turn ideas into fully formed designs through collaborative dialogue. This skill has THREE PHASES that must be completed in order:
 
-## The Mentality
+1. **Discovery** — Understand the problem, find actual intention
+2. **Design** — Architecture, tech stack, components
+3. **Specification** — Features, workflows, implementation plan
+
+**Announce at start:** "I'm using the feature-tree:brainstorm skill to design this properly."
+
+---
+
+## Phase 1: Discovery
+
+### The Mentality
 
 **Don't execute literally. Find the actual intention.**
 
@@ -23,9 +33,9 @@ ACTUAL INTENTION (why they said it)
 SMART SOLUTION (address the real need)
 ```
 
-### Example
+**Example:**
 
-**User:** "Don't use emojis and gradient colors in the dashboard"
+User: "Don't use emojis and gradient colors in the dashboard"
 
 | Level | Content |
 |-------|---------|
@@ -33,15 +43,42 @@ SMART SOLUTION (address the real need)
 | Intention | "The UI looks AI-designed and it's embarrassing" |
 | Smart solution | Research good design principles → understand the project's vibe → propose a design language based on wisdom, not default AI aesthetics |
 
+### Before Anything Else
+
+1. **Check Feature Tree context:**
+   ```
+   search_features("relevant keywords")
+   search_workflows("relevant keywords")
+   ```
+2. **Present relevant context:** "I found these existing features/workflows that might relate..."
+
+### Two Planning Modes
+
+Detect which mode from the user's request:
+
+**Forward Planning** (Journey → Flow → Feature)
+- "Users should be able to..."
+- "I want to add..."
+- "We need a way to..."
+
+**Reverse Planning** (Problem → Solution → Feature)
+- "Users are struggling with..."
+- "We need to fix..."
+- "This is broken..."
+
+If ambiguous, ask: "Are you designing a new experience (Forward) or solving a problem (Reverse)?"
+
+### Mind Tool Checkpoints
+
+**These are NOT optional.** For each mind tool, you MUST either:
+- Apply it and document the finding, OR
+- Explicitly state why it doesn't apply to this situation
+
+Work through them conversationally with the user. Don't rush. These checkpoints often reveal the most important insights.
+
 ---
 
-## Mind Tools
-
-These are thinking tools, not scripts. Understand WHY they work, apply them when they fit.
-
----
-
-### First Principle Reasoning
+#### Checkpoint 1: First Principle Reasoning
 
 **WHY IT EXISTS:** People communicate in solutions, not problems. "Add a spinner" is a solution. The problem might be "page feels slow" — which has ten better solutions than a spinner. If you execute the solution without understanding the problem, you might build the wrong thing perfectly.
 
@@ -51,9 +88,17 @@ These are thinking tools, not scripts. Understand WHY they work, apply them when
 
 **WHAT YOU'RE LOOKING FOR:** The actual intention. The frustration or desire that spawned the request. Once you find it, you can often propose something better than what they asked for.
 
+**CHECKPOINT OUTPUT:**
+```
+First Principle Reasoning:
+- Surface request: [what they said]
+- Actual intention: [why they said it]
+- Better approach: [if any] OR [surface request IS the right approach because...]
+```
+
 ---
 
-### The Crux Finder
+#### Checkpoint 2: The Crux Finder
 
 **WHY IT EXISTS:** Every project has a core bet — an assumption that if true means this works, if false means it doesn't. People bury this under months of building before testing it. They build auth systems and polish UIs before checking if anyone wants the core thing.
 
@@ -63,9 +108,18 @@ These are thinking tools, not scripts. Understand WHY they work, apply them when
 
 **WHAT YOU'RE LOOKING FOR:** The ONE belief that everything else depends on. Then: how to test it with minimum investment before building.
 
+**CHECKPOINT OUTPUT:**
+```
+Crux Finder:
+- Core assumption: [the ONE thing that must be true]
+- If wrong: [what happens to the project]
+- Test approach: [how to validate with minimal investment]
+- Status: [untested / validated / skip - already validated because...]
+```
+
 ---
 
-### Pre-Mortem
+#### Checkpoint 3: Pre-Mortem
 
 **WHY IT EXISTS:** "What could go wrong?" triggers self-censorship. It feels pessimistic, disloyal, like you're not a team player. But "why did it fail?" is just forensics — analyzing something that already happened. The hypothetical framing gives social cover to say the uncomfortable things everyone suspects but nobody's saying.
 
@@ -75,9 +129,18 @@ These are thinking tools, not scripts. Understand WHY they work, apply them when
 
 **WHAT YOU'RE LOOKING FOR:** The failure modes people are secretly worried about. Early warning signs. Preventive measures that seem obvious once spoken but nobody was going to say.
 
+**CHECKPOINT OUTPUT:**
+```
+Pre-Mortem:
+- "It failed because...": [top 3 failure modes]
+- Early warning signs: [what to watch for]
+- Mitigations: [preventive measures]
+- OR: Skip - [reason this doesn't apply, e.g., "trivial change with no failure modes"]
+```
+
 ---
 
-### Scope Fence
+#### Checkpoint 4: Scope Fence
 
 **WHY IT EXISTS:** Most projects die of scope creep, not bad core ideas. Features accrete. "What if we also..." multiplies. Each addition seems small but they compound into a monster that never ships.
 
@@ -87,9 +150,18 @@ These are thinking tools, not scripts. Understand WHY they work, apply them when
 
 **WHAT YOU'RE LOOKING FOR:** The NOTs. What this explicitly isn't. What users you're okay losing. What features you're saying no to. The one-sentence answer to "what is this?"
 
+**CHECKPOINT OUTPUT:**
+```
+Scope Fence:
+- This IS: [one sentence]
+- This is NOT: [explicit exclusions]
+- Users we're okay losing: [who this isn't for]
+- Features we're saying no to: [cut list]
+```
+
 ---
 
-### User Day-In-Life
+#### Checkpoint 5: User Day-In-Life
 
 **WHY IT EXISTS:** "Users" as an abstraction lets you build for imaginary people. You can convince yourself anyone would want anything if you never get specific. But when you pick a real person with a real name and walk through their real Tuesday, the bullshit evaporates. Either you can describe their day concretely or you can't — and if you can't, you don't understand your user yet.
 
@@ -99,131 +171,198 @@ These are thinking tools, not scripts. Understand WHY they work, apply them when
 
 **WHAT YOU'RE LOOKING FOR:** A specific person (named), their context, WHEN the problem appears in their day, what they currently do about it, what's annoying about that. This person becomes the reference point for all design decisions.
 
----
-
-## Two Planning Modes
-
-### Forward Planning
-**Journey → Flow → Feature**
-
-Use when designing new experiences:
-- "Users should be able to..."
-- "I want to add..."
-- "We need a way to..."
-
-### Reverse Planning
-**Problem → Solution → Feature**
-
-Use when solving problems:
-- "Users are struggling with..."
-- "We need to fix..."
-- "This is broken..."
-
-**Detection:** Infer from user's request. If ambiguous, ask: "Are you designing a new experience (Forward) or solving a problem (Reverse)?"
+**CHECKPOINT OUTPUT:**
+```
+User Day-In-Life:
+- Name: [specific person, real or composite]
+- Context: [job, situation]
+- When problem appears: [specific moment in their day]
+- Current workaround: [what they do now]
+- Pain point: [what's annoying about it]
+- OR: Skip - [reason, e.g., "internal tool, user is us"]
+```
 
 ---
 
-## The Process
+## Phase 2: Design
 
-### Before Brainstorming
+After completing Discovery checkpoints, move to Design. This phase covers the technical foundation.
 
-1. **Check Feature Tree context:**
-   ```
-   search_features("relevant keywords")
-   search_workflows("relevant keywords")
-   ```
-2. **Present relevant context:** "I found these existing features/workflows that might relate..."
+### Conversation Style
 
-### During Brainstorming
-
-**Conversation style:**
 - Ask questions one at a time — don't overwhelm
 - Prefer multiple choice when possible, open-ended when exploring
-- Propose 2-3 approaches with trade-offs
+- Propose 2-3 different approaches with trade-offs
 - Lead with your recommended option and explain why
+- Present in sections of 200-300 words, check after each
 
-**Forward mode flow:**
-1. Understand the journey — What's the user trying to achieve?
-2. Map the flows — What steps does the user take?
-3. Identify features — What capabilities support each flow?
+### Architecture Discussion
 
-**Reverse mode flow:**
-1. Clarify the problem — What's broken or missing? Who's affected?
-2. Design the solution — What experience solves this?
-3. Identify features — What capabilities are needed?
+Explore and document:
 
-**Throughout:**
-- Apply mind tools when relevant (Crux Finder, Pre-Mortem, Scope Fence, User Day-In-Life)
-- Explore technical decisions with rationale
-- YAGNI ruthlessly — remove unnecessary features
+1. **System Overview** — What are the major components? How do they interact?
+2. **Data Model** — What data exists? How is it structured? What are the relationships?
+3. **Integration Points** — What external systems/APIs? How does auth work?
+4. **State Management** — Where does state live? How does it flow?
 
-### Presenting the Design
+### Tech Stack Discussion
 
-- Break into sections of 200-300 words
-- Ask after each section: "Does this look right?"
-- Include mermaid diagrams for flow clarity
-- Be ready to go back and clarify
+For each technology choice, discuss:
+- What are the options?
+- Why this choice over alternatives?
+- What are the trade-offs?
+- Does the team have experience with it?
+
+**Example format:**
+```
+Tech Stack Discussion:
+
+Database:
+- Options: PostgreSQL, SQLite, MongoDB
+- Choice: SQLite
+- Rationale: Portable, no server needed, sufficient for single-user
+- Trade-off: No concurrent writes, but acceptable for this use case
+
+API Style:
+- Options: REST, GraphQL, tRPC
+- Choice: REST
+- Rationale: Simpler, team knows it, fits the CRUD nature of this app
+- Trade-off: Multiple requests for complex data, acceptable
+```
+
+### Component Design
+
+For each major component:
+- What does it do?
+- What are its inputs/outputs?
+- What are the edge cases?
+- How does it handle errors?
+
+### Flow Diagrams
+
+Use mermaid for clarity:
+
+```mermaid
+graph TD
+    A[User action] --> B[Component 1]
+    B --> C{Decision}
+    C -->|Yes| D[Component 2]
+    C -->|No| E[Error handling]
+    D --> F[Outcome]
+```
 
 ---
 
-## Output Format
+## Phase 3: Specification
 
-### Design Doc Structure
+After Design is validated, create the specification for implementation.
+
+### Features Identified
+
+Map the design to Feature Tree entries:
+
+| ID | Name | Type | Dependencies | Notes |
+|----|------|------|--------------|-------|
+| AUTH.login | User Login | feature | INFRA.session | Entry point |
+| INFRA.session | Session Management | infra | - | Shared utility |
+| NEW.feature | New Capability | new | AUTH.login | Needs implementation |
+
+### Workflows Identified
+
+Map user journeys to workflows:
+
+| ID | Name | Depends On | Notes |
+|----|------|------------|-------|
+| USER.login_flow | Login Flow | AUTH.login, AUTH.session | Happy path |
+| USER.login_error | Login Error | AUTH.login | Error handling |
+
+### Implementation Tasks
+
+Break down into implementable chunks:
+
+```markdown
+### Task 1: [Component/Feature Name]
+**Goal:** [What this task accomplishes]
+**Features:** [Which FT features this implements]
+**Depends on:** [What must be done first]
+
+### Task 2: [Component/Feature Name]
+...
+```
+
+---
+
+## Design Doc Output
+
+### Structure
 
 ```markdown
 # [Topic] Design
+
+> **For Claude:** REQUIRED SUB-SKILL: Use feature-tree:executing-plans to implement this design.
 
 ## Context
 - What exists (from FT search)
 - Why we're designing this
 
-## [Journeys & Flows / Problem & Solution]
+## Discovery
 
-[Content based on mode]
+### First Principle Reasoning
+[checkpoint output]
 
-### Flow Diagram
+### Crux
+[checkpoint output]
 
-​```mermaid
-graph TD
-    A[User action] --> B[FEATURE.one]
-    B --> C[FEATURE.two]
-    C --> D[Outcome]
-​```
+### Pre-Mortem
+[checkpoint output]
 
-## Technical Decisions
+### Scope Fence
+[checkpoint output]
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Auth method | JWT | Stateless, mobile-friendly |
-| Storage | PostgreSQL | Relational, team knows it |
+### User Day-In-Life
+[checkpoint output]
 
-## Scope Fence
+## Design
 
-NOT doing:
-- [Explicit exclusions]
-- [Features we're saying no to]
+### Architecture
+[system overview, major components, interactions]
 
-## Features Identified
+### Tech Stack
+| Technology | Choice | Rationale |
+|------------|--------|-----------|
+| Database | SQLite | Portable, no server |
+| API | REST | Simple, team knows it |
+| Frontend | React | Component model fits |
 
-| ID | Name | Status | Notes |
-|----|------|--------|-------|
-| EXISTING.feature | ... | reuse | already exists |
-| NEW.feature | ... | new | needs implementation |
+### Data Model
+[entities, relationships, schema notes]
+
+### Component Design
+[for each major component]
+
+### Flow Diagrams
+[mermaid diagrams]
+
+## Specification
+
+### Features
+| ID | Name | Type | Dependencies |
+|----|------|------|--------------|
+| ... | ... | ... | ... |
+
+### Workflows
+| ID | Name | Depends On |
+|----|------|------------|
+| ... | ... | ... |
+
+### Implementation Tasks
+1. [Task 1]
+2. [Task 2]
+...
 
 ## Open Questions
 - [Unresolved items]
 ```
-
-### What's in the Design Doc
-- Workflows and flows with mermaid diagrams
-- Technical decisions with rationale
-- Scope fences (explicit "nots")
-- Feature mapping
-
-### What's NOT in the Design Doc
-- File paths, folder structure
-- Code snippets, function names
-- Step-by-step implementation instructions
 
 ---
 
@@ -235,10 +374,12 @@ Write to `docs/plans/YYYY-MM-DD-<topic>-design.md`
 
 (Plans are gitignored — don't commit)
 
-### 2. Offer Feature Tree Population
+### 2. Populate Feature Tree
+
+**REQUIRED:** Create the features and workflows in Feature Tree.
 
 ```
-Design saved. Create these in Feature Tree?
+Creating in Feature Tree:
 
 Workflows:
 - USER_ONBOARDING.signup_flow
@@ -250,51 +391,66 @@ Features (new):
 
 Features (reuse):
 - DB.user (exists)
-
-[yes / no / review first]
 ```
 
-If yes: Create with proper `depends_on` relationships and mermaid diagrams.
+Create with proper `depends_on` relationships and mermaid diagrams.
 
 ### 3. Sync Project Memory
 
-If ft-mem plugin is installed:
-```
-Sync brainstorming discoveries to project memory?
-(updates CONTEXT.md, captures decisions, scope fences, user insights)
-```
+**REQUIRED SUB-SKILL:** Use `ft-mem:brainstorm-sync` to sync discoveries to project memory.
 
-→ Invoke `ft-mem:brainstorm-sync` skill if available
-→ If skill not found, skip silently (ft-mem not installed)
+This updates:
+- CONTEXT.md with new insights
+- Memories with technical decisions, scope fences, user insights
+
+If ft-mem is not installed, inform the user: "ft-mem plugin not found — skipping memory sync. Consider installing for session continuity."
 
 ### 4. Implementation Handoff
 
 ```
-Ready to implement?
-1. Start implementation now
-2. Done for now
+Design complete and saved. Ready to implement?
+
+1. Start implementation (uses feature-tree:executing-plans)
+2. Done for now (I'll implement later)
 ```
+
+If starting implementation:
+- **REQUIRED SUB-SKILL:** Use `feature-tree:executing-plans` to implement the design task-by-task
 
 ---
 
 ## Key Principles
 
-1. **Workflow-first** — Human creativity at the abstract level, descend to features later
+1. **Three phases in order** — Discovery → Design → Specification. Don't skip.
 
-2. **Find actual intention** — Surface requests hide real needs; ask "why" gently
+2. **Mind tools are checkpoints** — Must consider each one. Can skip with documented reason, but must explicitly address.
 
-3. **Check before creating** — Search existing FT context, build on what exists
+3. **Tech stack requires rationale** — Every choice needs "why this over alternatives"
 
-4. **One question at a time** — Don't overwhelm; prefer choices when possible
+4. **Workflow-first** — Human creativity at the abstract level, descend to features later
 
-5. **Explore alternatives** — Always propose 2-3 approaches before settling
+5. **Find actual intention** — Surface requests hide real needs; ask "why" gently
 
-6. **Decisions, not speculation** — Capture choices with rationale, not implementation guesses
+6. **One question at a time** — Don't overwhelm; prefer choices when possible
 
-7. **Mermaid for clarity** — Visual diagrams help humans validate
+7. **Explore alternatives** — Always propose 2-3 approaches before settling
 
-8. **YAGNI ruthlessly** — Remove unnecessary features from all designs
+8. **Mermaid for clarity** — Visual diagrams help humans validate
 
-9. **Incremental validation** — Present in sections, check each one
+9. **YAGNI ruthlessly** — Remove unnecessary features from all designs
 
-10. **Be flexible** — Go back and clarify when something doesn't fit
+10. **Incremental validation** — Present in sections, check each one
+
+---
+
+## Red Flags
+
+**Never:**
+- Skip mind tool checkpoints without explicit reason
+- Make tech stack choices without discussing alternatives
+- Write design doc before completing all three phases
+- Skip ft-mem:brainstorm-sync (unless plugin not installed)
+- Start implementation without offering executing-plans skill
+- Rush through Discovery to get to "the real work"
+
+**The Discovery phase IS the real work.** Bad Discovery = building the wrong thing efficiently.

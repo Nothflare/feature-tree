@@ -129,7 +129,8 @@ No separate type field - just features with `INFRA.*` IDs.
 | Skill/Command | Description |
 |---------------|-------------|
 | `/bootstrap` | Two-phase codebase analysis (features → workflows) |
-| `/brainstorm` | Workflow-first design with mind tools |
+| `/brainstorm` | Three-phase design: Discovery → Design → Specification |
+| `/executing-plans` | Execute designs feature-by-feature with batch commits |
 | `/commit` | Commit with feature tree update |
 
 ### ft-mem
