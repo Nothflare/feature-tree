@@ -21,7 +21,7 @@ Two parallel trees that enable impact analysis and context continuity:
 
 ## SESSION
 
-If you see `FT_SESSION=N` in context, pass `_s=N` to all Feature Tree tools.
+If you see `FT_SESSION=N` in context, pass `s=N` to all Feature Tree tools.
 This ensures data goes to the correct project when multiple sessions run concurrently.
 
 ## KEY MANTRAS
@@ -300,9 +300,9 @@ def debug_cwd() -> str:
 
 
 @mcp.tool()
-def resync_fts(_s: int | None = None) -> str:
+def resync_fts(s: int | None = None) -> str:
     """Rebuild FTS search index. Use if file/symbol search returns empty results."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         db._resync_all_fts()
         db.conn.commit()
@@ -312,9 +312,9 @@ def resync_fts(_s: int | None = None) -> str:
 
 
 @mcp.tool()
-def search_features(query: str, _s: int | None = None) -> str:
+def search_features(query: str, s: int | None = None) -> str:
     """Fuzzy search features by name, description, or technical notes. Use before starting work to understand what exists."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         results = db.search_features(query)
         # Trim to essential fields only
@@ -341,10 +341,10 @@ def add_feature(
     description: str | None = None,
     uses: list[str] | None = None,
     confidence: str | None = None,
-    _s: int | None = None
+    s: int | None = None
 ) -> str:
     """Create a new feature. Use when human describes something new."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         # Validate uses references
         warnings = []
@@ -354,7 +354,7 @@ def add_feature(
                     warnings.append(f"uses references non-existent feature '{ref_id}'")
 
         db.add_feature(id=id, name=name, parent_id=parent_id, description=description, uses=uses, confidence=confidence)
-        regenerate_markdown(_s)
+        regenerate_markdown(s)
 
         result = {"ok": True}
         if warnings:
@@ -375,10 +375,10 @@ def update_feature(
     description: str | None = None,
     uses: list[str] | None = None,
     confidence: str | None = None,
-    _s: int | None = None
+    s: int | None = None
 ) -> str:
     """Update a feature. ALWAYS record code_symbols + files after implementing. 1x effort now = 10x saved later."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         fields = {}
         if status is not None:
@@ -399,16 +399,16 @@ def update_feature(
             fields["confidence"] = confidence
 
         db.update_feature(id, **fields)
-        regenerate_markdown(_s)
+        regenerate_markdown(s)
         return '{"ok":true}'
     finally:
         db.close()
 
 
 @mcp.tool()
-def get_feature(id: str, _s: int | None = None) -> str:
+def get_feature(id: str, s: int | None = None) -> str:
     """Get full details of a single feature by ID, including linked workflows and used features."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         feature = db.get_feature(id)
         if feature:
@@ -443,13 +443,13 @@ def get_feature(id: str, _s: int | None = None) -> str:
 
 
 @mcp.tool()
-def delete_feature(id: str, _s: int | None = None) -> str:
+def delete_feature(id: str, s: int | None = None) -> str:
     """Delete a feature. Hard-deletes if planned, soft-deletes if in-progress/done."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         result = db.delete_feature(id)
         if result.get("ok"):
-            regenerate_markdown(_s)
+            regenerate_markdown(s)
         return json.dumps(result)
     finally:
         db.close()
@@ -458,9 +458,9 @@ def delete_feature(id: str, _s: int | None = None) -> str:
 # ==================== WORKFLOWS ====================
 
 @mcp.tool()
-def search_workflows(query: str, _s: int | None = None) -> str:
+def search_workflows(query: str, s: int | None = None) -> str:
     """Fuzzy search workflows by name, description, or purpose."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         results = db.search_workflows(query)
         trimmed = []
@@ -484,10 +484,10 @@ def add_workflow(
     depends_on: list[str] | None = None,
     mermaid: str | None = None,
     confidence: str | None = None,
-    _s: int | None = None
+    s: int | None = None
 ) -> str:
     """Create a workflow. Use ID hierarchy: JOURNEY.flow (like features). depends_on links to feature IDs."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         # Validate depends_on references
         warnings = []
@@ -502,7 +502,7 @@ def add_workflow(
             depends_on=depends_on, mermaid=mermaid,
             confidence=confidence
         )
-        regenerate_markdown(_s)
+        regenerate_markdown(s)
 
         result = {"ok": True}
         if warnings:
@@ -513,9 +513,9 @@ def add_workflow(
 
 
 @mcp.tool()
-def get_workflow(id: str, _s: int | None = None) -> str:
+def get_workflow(id: str, s: int | None = None) -> str:
     """Get full details of a workflow by ID, including linked features."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         workflow = db.get_workflow(id)
         if workflow:
@@ -540,10 +540,10 @@ def update_workflow(
     description: str | None = None,
     purpose: str | None = None,
     confidence: str | None = None,
-    _s: int | None = None
+    s: int | None = None
 ) -> str:
     """Update a workflow's fields."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         fields = {}
         if status is not None:
@@ -560,20 +560,20 @@ def update_workflow(
             fields["confidence"] = confidence
 
         db.update_workflow(id, **fields)
-        regenerate_markdown(_s)
+        regenerate_markdown(s)
         return '{"ok":true}'
     finally:
         db.close()
 
 
 @mcp.tool()
-def delete_workflow(id: str, _s: int | None = None) -> str:
+def delete_workflow(id: str, s: int | None = None) -> str:
     """Delete a workflow. Hard if planned, soft if in-progress/done."""
-    db = get_db(_s)
+    db = get_db(s)
     try:
         result = db.delete_workflow(id)
         if result.get("ok"):
-            regenerate_markdown(_s)
+            regenerate_markdown(s)
         return json.dumps(result)
     finally:
         db.close()
