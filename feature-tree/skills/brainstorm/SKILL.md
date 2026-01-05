@@ -345,20 +345,62 @@ Break down into implementable chunks:
 
 ## Specification
 
-### Features
-| ID | Name | Type | Dependencies |
-|----|------|------|--------------|
-| ... | ... | ... | ... |
+### Features (Complete List)
 
-### Workflows
-| ID | Name | Depends On |
-|----|------|------------|
-| ... | ... | ... |
+**IMPORTANT:** List ALL features identified. This is the source of truth for what will be created in Feature Tree.
+
+| ID | Name | Layer | Uses | Description |
+|----|------|-------|------|-------------|
+| INFRA.database | Database Connection | 1-Infra | - | SQLite connection pool |
+| INFRA.config | Config Management | 1-Infra | - | Environment-based config |
+| AUTH.login | User Login | 2-Core | INFRA.database | Validate credentials, create session |
+| AUTH.session | Session Management | 2-Core | INFRA.database | JWT tokens, refresh |
+| USER.profile | User Profile | 3-Support | AUTH.session | View/edit profile |
+
+**For each feature, note:**
+- Layer (0-Setup, 1-Infra, 2-Core, 3-Support, 4-Polish)
+- Uses (dependencies on other features, especially INFRA.*)
+- Brief description of what it does
+
+### Workflows (Complete List)
+
+**IMPORTANT:** List ALL workflows identified. Each workflow shows how features compose into user experiences.
+
+| ID | Name | Depends On | Purpose |
+|----|------|------------|---------|
+| AUTH.login_flow | User Login Flow | AUTH.login, AUTH.session | User enters credentials → validates → receives session |
+| AUTH.logout_flow | User Logout Flow | AUTH.session | User clicks logout → session destroyed → redirected |
+| USER.profile_flow | Profile Management | USER.profile, AUTH.session | User views/edits their profile |
+
+**For each workflow, include mermaid diagram:**
+
+```mermaid
+graph TD
+    A[User enters credentials] --> B[AUTH.login]
+    B --> C{Valid?}
+    C -->|Yes| D[AUTH.session]
+    D --> E[Redirect to dashboard]
+    C -->|No| F[Show error]
+```
 
 ### Implementation Tasks
-1. [Task 1]
-2. [Task 2]
-...
+
+Group by layer, reference feature IDs:
+
+**Layer 0 - Setup:**
+1. Initialize project structure
+2. Install dependencies, configure build
+
+**Layer 1 - Infrastructure:**
+3. INFRA.database - Set up database connection
+4. INFRA.config - Add config management
+
+**Layer 2 - Core Features:**
+5. AUTH.login - Implement login
+6. AUTH.session - Implement session management
+
+**Layer 3 - Supporting Features:**
+7. USER.profile - Implement profile view/edit
 
 ## Open Questions
 - [Unresolved items]

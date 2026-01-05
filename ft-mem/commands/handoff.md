@@ -8,7 +8,22 @@ Save context so next Claude continues seamlessly. Handoff depth depends on task 
 
 ## Steps
 
-### 1. Update or Create Memories
+### 1. Check Feature Tree Changes
+
+**List features created or modified this session:**
+
+```
+search_features("*")  # or relevant query
+```
+
+Record any features you:
+- Created (add_feature)
+- Modified (update_feature)
+- Changed status on
+
+This prevents next Claude from recreating features that already exist.
+
+### 2. Update or Create Memories
 
 Memories are flexible `.md` files in `.feat-tree/memories/`. Update existing ones or create new ones as needed:
 
@@ -29,7 +44,7 @@ Memories are flexible `.md` files in `.feat-tree/memories/`. Update existing one
 - Dense > verbose (same info, fewer tokens)
 - Only create if future sessions will benefit
 
-### 2. Write Handoff (Status-Dependent)
+### 3. Write Handoff (Status-Dependent)
 
 Create `.feat-tree/memories/handoff.md` using appropriate template:
 
@@ -43,11 +58,21 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 ## Completed
 [What was accomplished]
 
+## Features Created/Modified
+| ID | Name | Status | Action |
+|----|------|--------|--------|
+| AUTH.login | User Login | done | created |
+| INFRA.logger | Logger | done | modified |
+
 ## Files Changed
 - path/to/file.ts
 
 ## Notes for Future
 - [Any gotchas discovered]
+
+## Read These Memories
+Next session should read:
+- `.feat-tree/memories/[relevant_memory].md` - [why it's helpful]
 ```
 
 ---
@@ -59,6 +84,12 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 
 ## Working On
 [Goal and current state]
+
+## Features Created/Modified
+| ID | Name | Status | Action |
+|----|------|--------|--------|
+| AUTH.login | User Login | in-progress | created |
+| AUTH.session | Session Mgmt | planned | created |
 
 ## Approach
 [Strategy being used and why]
@@ -75,6 +106,11 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 
 ## Watch Out For
 - [Gotcha or edge case discovered]
+
+## Read These Memories
+Next session MUST read:
+- `.feat-tree/memories/[relevant_memory].md` - [why it's critical]
+- `.feat-tree/memories/[another].md` - [why needed]
 ```
 
 ---
@@ -87,6 +123,11 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 ## Bug/Issue
 [Clear description]
 
+## Features Affected
+| ID | Name | Notes |
+|----|------|-------|
+| AUTH.login | User Login | Bug is here |
+
 ## Root Cause
 [Cause or "Still investigating"]
 
@@ -98,6 +139,10 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 
 ## Next To Try
 - [Specific next step]
+
+## Read These Memories
+Next session should read:
+- `.feat-tree/memories/debugging_[topic].md` - [contains relevant context]
 ```
 
 ---
@@ -110,6 +155,11 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 ## Task
 [What was being attempted]
 
+## Features Involved
+| ID | Name | Status |
+|----|------|--------|
+| ... | ... | ... |
+
 ## Blocker
 [What's preventing progress]
 
@@ -118,13 +168,27 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 
 ## Needs
 - [External input/decision needed]
+
+## Read These Memories
+Next session should read:
+- `.feat-tree/memories/[relevant].md` - [why needed to understand blocker]
 ```
 
 ---
 
-### 3. Confirm
+### 4. Confirm
 
-Say: "Memories updated. Safe to /clear"
+Say:
+```
+Memories updated. Safe to /clear.
+
+Next session should read:
+- .feat-tree/memories/handoff.md
+- .feat-tree/memories/[other relevant files]
+
+Features in Feature Tree:
+- [list any created/modified features]
+```
 
 ## Context Efficiency
 
@@ -132,3 +196,5 @@ Say: "Memories updated. Safe to /clear"
 - Include WHY things failed, not just WHAT
 - Future Claude should never repeat failed approaches
 - Decisions need reasoning so they're not re-questioned
+- **Always list features created** — prevents duplicate creation
+- **Always list memories to read** — ensures seamless continuation
