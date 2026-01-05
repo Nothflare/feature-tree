@@ -53,7 +53,7 @@ class FeatureDB:
             );
 
             CREATE VIRTUAL TABLE IF NOT EXISTS workflows_fts USING fts5(
-                id, name, description, purpose
+                id, name, description, purpose, depends_on
             );
         """)
         self.conn.commit()
@@ -62,8 +62,9 @@ class FeatureDB:
         self._migrate_add_column("features", "confidence", "TEXT")
         self._migrate_add_column("workflows", "confidence", "TEXT")
 
-        # Migrate FTS table to include files and code_symbols
+        # Migrate FTS tables
         self._migrate_fts_add_columns()
+        self._migrate_workflow_fts_add_columns()
 
     def _migrate_add_column(self, table: str, column: str, col_type: str):
         """Add column to existing table if it doesn't exist."""
@@ -106,6 +107,37 @@ class FeatureDB:
             self.conn.execute(
                 "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols, commit_ids) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (row[0], row[1], row[2], row[3], files_text, symbols_text, commits_text)
+            )
+
+    def _migrate_workflow_fts_add_columns(self):
+        """Recreate workflow FTS table if it doesn't have depends_on column."""
+        needs_rebuild = False
+        try:
+            self.conn.execute("SELECT depends_on FROM workflows_fts LIMIT 0")
+        except Exception:
+            needs_rebuild = True
+
+        if needs_rebuild:
+            self.conn.execute("DROP TABLE IF EXISTS workflows_fts")
+            self.conn.execute("""
+                CREATE VIRTUAL TABLE workflows_fts USING fts5(
+                    id, name, description, purpose, depends_on
+                )
+            """)
+            self._resync_all_workflow_fts()
+            self.conn.commit()
+
+    def _resync_all_workflow_fts(self):
+        """Re-sync all workflows to FTS index."""
+        self.conn.execute("DELETE FROM workflows_fts")
+        rows = self.conn.execute(
+            "SELECT id, name, description, purpose, depends_on FROM workflows"
+        ).fetchall()
+        for row in rows:
+            depends_text = self._json_to_text(row[4])
+            self.conn.execute(
+                "INSERT INTO workflows_fts (id, name, description, purpose, depends_on) VALUES (?, ?, ?, ?, ?)",
+                (row[0], row[1], row[2], row[3], depends_text)
             )
 
     def _json_to_text(self, json_str: str | None) -> str | None:
@@ -285,13 +317,14 @@ class FeatureDB:
         self.conn.execute("DELETE FROM workflows_fts WHERE id = ?", (workflow_id,))
         if not delete_only:
             row = self.conn.execute(
-                "SELECT id, name, description, purpose FROM workflows WHERE id = ?",
+                "SELECT id, name, description, purpose, depends_on FROM workflows WHERE id = ?",
                 (workflow_id,)
             ).fetchone()
             if row:
+                depends_text = self._json_to_text(row["depends_on"])
                 self.conn.execute(
-                    "INSERT INTO workflows_fts (id, name, description, purpose) VALUES (?, ?, ?, ?)",
-                    (row["id"], row["name"], row["description"], row["purpose"])
+                    "INSERT INTO workflows_fts (id, name, description, purpose, depends_on) VALUES (?, ?, ?, ?, ?)",
+                    (row["id"], row["name"], row["description"], row["purpose"], depends_text)
                 )
 
     def add_workflow(
@@ -322,13 +355,15 @@ class FeatureDB:
 
     def search_workflows(self, query: str) -> list[dict]:
         """FTS5 search with fallback to LIKE."""
+        # Normalize query: AUTH.login → "AUTH login"
+        normalized = self._normalize_query(query)
         try:
             rows = self.conn.execute(
                 """SELECT w.* FROM workflows w
                    JOIN workflows_fts wfts ON w.id = wfts.id
                    WHERE workflows_fts MATCH ? AND w.status != 'deleted'
                    ORDER BY rank""",
-                (query,)
+                (normalized,)
             ).fetchall()
             return [dict(row) for row in rows]
         except sqlite3.OperationalError:
@@ -336,8 +371,8 @@ class FeatureDB:
             rows = self.conn.execute(
                 """SELECT * FROM workflows
                    WHERE status != 'deleted'
-                   AND (name LIKE ? OR description LIKE ? OR purpose LIKE ?)""",
-                (like_query, like_query, like_query)
+                   AND (name LIKE ? OR description LIKE ? OR purpose LIKE ? OR depends_on LIKE ?)""",
+                (like_query, like_query, like_query, like_query)
             ).fetchall()
             return [dict(row) for row in rows]
 

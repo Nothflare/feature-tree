@@ -151,8 +151,9 @@ Searches across: id, name, description, technical_notes, files, code_symbols, co
 Use for understanding user impact:
 - "What user journeys exist?" → search by domain
 - "If I break this, what flows fail?" → search to find affected workflows
+- "What workflows use AUTH.login?" → search by feature ID in depends_on
 
-Searches across: id, name, description, purpose
+Searches across: id, name, description, purpose, depends_on
 
 ### get_feature(id) — Full Context
 Returns everything about a feature:
