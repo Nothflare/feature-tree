@@ -16,20 +16,22 @@ def main():
         return
 
     feat_tree_home = Path.home() / ".feat-tree"
-    sessions_dir = feat_tree_home / "sessions"
-    sessions_dir.mkdir(parents=True, exist_ok=True)
+    feat_tree_home.mkdir(parents=True, exist_ok=True)
+    sessions_file = feat_tree_home / "sessions.json"
 
-    # Get next session ID (incrementing from 1)
-    counter_file = sessions_dir / ".counter"
+    # Load existing sessions map: {project_path: session_id}
     try:
-        session_id = int(counter_file.read_text()) + 1
+        sessions = json.loads(sessions_file.read_text(encoding="utf-8"))
     except:
-        session_id = 1
-    counter_file.write_text(str(session_id))
+        sessions = {}
 
-    # Store session -> project mapping
-    session_file = sessions_dir / f"{session_id}.json"
-    session_file.write_text(json.dumps({"project": cwd}), encoding="utf-8")
+    # Reuse existing ID for this project, or assign next available
+    if cwd in sessions:
+        session_id = sessions[cwd]
+    else:
+        session_id = max(sessions.values(), default=0) + 1
+        sessions[cwd] = session_id
+        sessions_file.write_text(json.dumps(sessions), encoding="utf-8")
 
     # Also write to current-project for backwards compatibility
     (feat_tree_home / "current-project").write_text(cwd, encoding="utf-8")

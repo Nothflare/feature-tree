@@ -239,11 +239,14 @@ def get_project_root(session_id: int | None = None) -> Path:
 
     # 1. Session ID lookup (supports concurrent sessions)
     if session_id is not None:
-        session_file = feat_tree_home / "sessions" / f"{session_id}.json"
-        if session_file.exists():
+        sessions_file = feat_tree_home / "sessions.json"
+        if sessions_file.exists():
             try:
-                data = json.loads(session_file.read_text(encoding="utf-8"))
-                return Path(data["project"])
+                sessions = json.loads(sessions_file.read_text(encoding="utf-8"))
+                # sessions is {project_path: session_id}, reverse lookup
+                for project, sid in sessions.items():
+                    if sid == session_id:
+                        return Path(project)
             except Exception:
                 pass
 
