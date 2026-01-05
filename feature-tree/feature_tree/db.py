@@ -1,6 +1,7 @@
 # feature_tree/db.py
 import sqlite3
 import json
+import re
 from datetime import datetime, UTC
 from typing import Optional
 from pathlib import Path
@@ -246,8 +247,14 @@ class FeatureDB:
             self.update_feature(id, status="deleted")
             return {"ok": True, "type": "soft"}
 
+    def _normalize_query(self, query: str) -> str:
+        """Normalize query for FTS5: replace ., -, / with spaces."""
+        return re.sub(r'[.\-/\\]', ' ', query)
+
     def search_features(self, query: str) -> list[dict]:
         """FTS5 search with fallback to LIKE for simple queries."""
+        # Normalize query: health.ts → "health ts", status-check → "status check"
+        normalized = self._normalize_query(query)
         try:
             # Try FTS5 search
             rows = self.conn.execute(
@@ -255,17 +262,17 @@ class FeatureDB:
                    JOIN features_fts fts ON f.id = fts.id
                    WHERE features_fts MATCH ? AND f.status != 'deleted'
                    ORDER BY rank""",
-                (query,)
+                (normalized,)
             ).fetchall()
             return [dict(row) for row in rows]
         except sqlite3.OperationalError:
-            # Fallback to LIKE search
+            # Fallback to LIKE search (use original query for LIKE)
             like_query = f"%{query}%"
             rows = self.conn.execute(
                 """SELECT * FROM features
                    WHERE status != 'deleted'
-                   AND (name LIKE ? OR description LIKE ? OR technical_notes LIKE ?)""",
-                (like_query, like_query, like_query)
+                   AND (name LIKE ? OR description LIKE ? OR technical_notes LIKE ? OR files LIKE ? OR code_symbols LIKE ?)""",
+                (like_query, like_query, like_query, like_query, like_query)
             ).fetchall()
             return [dict(row) for row in rows]
 
