@@ -19,6 +19,119 @@ Two parallel trees that enable impact analysis and context continuity:
 - **Features** = atomic code units (what gets implemented)
 - **Workflows** = user-facing experiences (how features compose)
 
+## KEY MANTRAS
+
+1. **"Workflows are the source of truth for data flow"**
+2. **"Query the entries, don't just read the text"**
+3. **"Trace, don't speculate"**
+4. **"Check impact before changing"**
+5. **"Create entry before implementing"**
+
+---
+
+## BEFORE ANY IMPLEMENTATION (REQUIRED)
+
+These steps are MANDATORY. Do not skip them.
+
+1. **search_features("relevant terms")**
+   - Does this feature already exist?
+   - What related features exist?
+
+2. **search_workflows("relevant terms")**
+   - What user journeys touch this area?
+   - What would break if I change this?
+
+3. **If feature exists: get_feature(id)**
+   - What files/symbols are involved?
+   - What uses this? (used_by_features)
+   - What workflows depend on it? (linked_workflows)
+
+**If you skip these steps, you WILL:**
+- Recreate features that exist
+- Break workflows you didn't know about
+- Miss important context
+
+---
+
+## DATA FLOW TRACING (MANDATORY)
+
+Before implementing, trace the actual data flow:
+
+1. Find the entry point (route, handler, command)
+2. Trace what data comes in (request shape)
+3. Trace what happens to the data (transformations)
+4. Trace what data goes out (response shape)
+5. Check linked_workflows for the full journey
+
+**NEVER speculate about:**
+- Database schema → read the actual schema
+- Request/response shapes → read the actual types
+- State structure → read the actual store
+- API contracts → read the actual endpoints
+
+**If you don't know, ASK or READ. Don't guess.**
+
+---
+
+## IMPACT ANALYSIS (BEFORE ANY CHANGE)
+
+Before modifying existing code:
+
+1. **get_feature(id)** for the feature you're changing
+2. **Check used_by_features:**
+   - What other features depend on this?
+   - Will your change break them?
+3. **Check linked_workflows:**
+   - What user journeys use this?
+   - Will your change break the flow?
+
+**ESPECIALLY for INFRA.*:**
+- Infrastructure is high-impact
+- Many features depend on INFRA.*
+- ALWAYS check used_by_features before changing
+
+**If impact is unclear, ASK before changing.**
+
+---
+
+## FEATURE LIFECYCLE
+
+Follow this exact sequence:
+
+1. **CREATE** (before implementing)
+   ```
+   add_feature(id="AUTH.login", name="User Login", status="planned")
+   ```
+
+2. **START** (when beginning work)
+   ```
+   update_feature(id="AUTH.login", status="in-progress")
+   ```
+
+3. **TRACK** (during implementation)
+   ```
+   update_feature(id="AUTH.login",
+                  files=["src/auth/login.ts"],
+                  code_symbols=["handleLogin", "LoginRequest"])
+   ```
+
+4. **COMMIT** (after tests pass)
+   ```
+   /feature-tree:commit  # bundles git + FT update
+   ```
+
+5. **COMPLETE**
+   ```
+   update_feature(id="AUTH.login", status="done")
+   ```
+
+**NEVER:**
+- Implement before creating the feature entry
+- Use regular git commit instead of /feature-tree:commit
+- Forget to update files/symbols after implementing
+
+---
+
 ## WHEN TO USE EACH TOOL
 
 ### search_features(query)
@@ -26,15 +139,13 @@ Use BEFORE any implementation work:
 - "Does this feature already exist?" → search before creating
 - "What feature owns this code?" → search by file/symbol name
 - "What shared utilities exist?" → search "INFRA"
-- "What depends on authentication?" → search "auth" then check used_by
 
-Searches across: id, name, description, technical_notes
+Searches across: id, name, description, technical_notes, files, code_symbols
 
 ### search_workflows(query)
 Use for understanding user impact:
 - "What user journeys exist?" → search by domain
 - "If I break this, what flows fail?" → search to find affected workflows
-- "What's the current UX for X?" → search by user action
 
 Searches across: id, name, description, purpose
 
@@ -44,10 +155,6 @@ Returns everything about a feature:
 - **used_by_features**: What depends on this feature (reverse)
 - **linked_workflows**: Which workflows use this feature
 
-Use for impact analysis:
-- Changing AUTH.login? Check `used_by_features` AND `linked_workflows`
-- Refactoring INFRA.*? Check both — many features AND workflows may break
-
 ### get_workflow(id) — Workflow Readiness
 Returns workflow details plus:
 - **linked_features**: Features with their STATUS
@@ -55,6 +162,8 @@ Returns workflow details plus:
 Use to check if workflow is implementable:
 - All features "done"? → workflow is ready
 - Some features "planned"? → workflow is blocked, implement features first
+
+---
 
 ## FEATURES
 
@@ -113,15 +222,6 @@ add_feature(id="AUTH.login", uses=["INFRA.rate_limiter", "INFRA.database"])
 
 - Status = "planned" → **hard delete** (gone forever)
 - Status = "in-progress" or "done" → **soft delete** (recoverable)
-
-## PROTOCOL
-
-1. **Before implementing**: search_features + search_workflows to understand context
-2. **Creating new**: add_feature with proper ID, uses, description
-3. **During work**: update_feature with files, symbols, technical_notes, status="in-progress"
-4. **After batch**: Use /feature-tree:commit (bundles git + FT updates)
-5. **Before changing existing**: get_feature → check used_by_features AND linked_workflows
-6. **When uncertain**: ASK
 
 ## STATUS LIFECYCLE
 
@@ -193,6 +293,8 @@ def search_features(query: str) -> str:
                 uses_list = json.loads(r["uses"])
                 if uses_list:
                     item["uses_count"] = len(uses_list)
+            if r.get("confidence"):
+                item["confidence"] = r["confidence"]
             trimmed.append(item)
         return json.dumps(trimmed)
     finally:
@@ -205,14 +307,26 @@ def add_feature(
     name: str,
     parent_id: str | None = None,
     description: str | None = None,
-    uses: list[str] | None = None
+    uses: list[str] | None = None,
+    confidence: str | None = None
 ) -> str:
     """Create a new feature. Use when human describes something new."""
     db = get_db()
     try:
-        db.add_feature(id=id, name=name, parent_id=parent_id, description=description, uses=uses)
+        # Validate uses references
+        warnings = []
+        if uses:
+            for ref_id in uses:
+                if not db.get_feature(ref_id):
+                    warnings.append(f"uses references non-existent feature '{ref_id}'")
+
+        db.add_feature(id=id, name=name, parent_id=parent_id, description=description, uses=uses, confidence=confidence)
         regenerate_markdown()
-        return '{"ok":true}'
+
+        result = {"ok": True}
+        if warnings:
+            result["warnings"] = warnings
+        return json.dumps(result)
     finally:
         db.close()
 
@@ -226,7 +340,8 @@ def update_feature(
     commit_ids: list[str] | None = None,
     technical_notes: str | None = None,
     description: str | None = None,
-    uses: list[str] | None = None
+    uses: list[str] | None = None,
+    confidence: str | None = None
 ) -> str:
     """Update a feature. ALWAYS record code_symbols + files after implementing. 1x effort now = 10x saved later."""
     db = get_db()
@@ -246,6 +361,8 @@ def update_feature(
             fields["description"] = description
         if uses is not None:
             fields["uses"] = uses
+        if confidence is not None:
+            fields["confidence"] = confidence
 
         db.update_feature(id, **fields)
         regenerate_markdown()
@@ -312,10 +429,12 @@ def search_workflows(query: str) -> str:
     db = get_db()
     try:
         results = db.search_workflows(query)
-        trimmed = [
-            {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
-            for r in results
-        ]
+        trimmed = []
+        for r in results:
+            item = {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
+            if r.get("confidence"):
+                item["confidence"] = r["confidence"]
+            trimmed.append(item)
         return json.dumps(trimmed)
     finally:
         db.close()
@@ -329,17 +448,30 @@ def add_workflow(
     description: str | None = None,
     purpose: str | None = None,
     depends_on: list[str] | None = None,
-    mermaid: str | None = None
+    mermaid: str | None = None,
+    confidence: str | None = None
 ) -> str:
     """Create a workflow. Use ID hierarchy: JOURNEY.flow (like features). depends_on links to feature IDs."""
     db = get_db()
     try:
-        result = db.add_workflow(
+        # Validate depends_on references
+        warnings = []
+        if depends_on:
+            for ref_id in depends_on:
+                if not db.get_feature(ref_id):
+                    warnings.append(f"depends_on references non-existent feature '{ref_id}'")
+
+        db.add_workflow(
             id=id, name=name, parent_id=parent_id,
             description=description, purpose=purpose,
-            depends_on=depends_on, mermaid=mermaid
+            depends_on=depends_on, mermaid=mermaid,
+            confidence=confidence
         )
         regenerate_markdown()
+
+        result = {"ok": True}
+        if warnings:
+            result["warnings"] = warnings
         return json.dumps(result)
     finally:
         db.close()
@@ -371,7 +503,8 @@ def update_workflow(
     depends_on: list[str] | None = None,
     mermaid: str | None = None,
     description: str | None = None,
-    purpose: str | None = None
+    purpose: str | None = None,
+    confidence: str | None = None
 ) -> str:
     """Update a workflow's fields."""
     db = get_db()
@@ -387,6 +520,8 @@ def update_workflow(
             fields["description"] = description
         if purpose is not None:
             fields["purpose"] = purpose
+        if confidence is not None:
+            fields["confidence"] = confidence
 
         db.update_workflow(id, **fields)
         regenerate_markdown()

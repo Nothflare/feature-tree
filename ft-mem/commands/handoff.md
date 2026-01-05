@@ -55,11 +55,14 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 ## Completed
 [What was accomplished]
 
-## Features Created/Modified
+## Features Created/Modified (QUERY THESE)
 | ID | Name | Status | Action |
 |----|------|--------|--------|
 | AUTH.login | User Login | done | created |
 | INFRA.logger | Logger | done | modified |
+
+**Next session MUST run `get_feature(id)` for each row above.**
+The table is a summary — the FT entry is the source of truth.
 
 ## Files Changed
 - path/to/file.ts
@@ -69,13 +72,14 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 
 ## Continue Protocol for Next Session
 
-**Before any implementation, trace the data flow:**
+**Before any implementation:**
 
-1. For each feature below, run `get_feature(id)` to see current state
-2. Check `linked_workflows` to find related workflows
-3. For each workflow, run `get_workflow(id)` to understand the data flow
+1. Run `get_feature(id)` for EACH feature in the table above
+2. Check `linked_workflows` in each response
+3. For each workflow: run `get_workflow(id)` to understand data flow
 4. Trace: where does data come from → how it transforms → where it goes
 
+**The handoff TEXT is a summary. The FT ENTRIES are the source of truth.**
 **DO NOT speculate about data structures or DB schema. Trace the actual flow.**
 
 ## Read These Memories
@@ -93,11 +97,14 @@ Next session should read:
 ## Working On
 [Goal and current state]
 
-## Features Created/Modified
+## Features Created/Modified (QUERY THESE)
 | ID | Name | Status | Action |
 |----|------|--------|--------|
 | AUTH.login | User Login | in-progress | created |
 | AUTH.session | Session Mgmt | planned | created |
+
+**Next session MUST run `get_feature(id)` for each row above.**
+The table is a summary — the FT entry is the source of truth.
 
 ## Approach
 [Strategy being used and why]
@@ -117,13 +124,14 @@ Next session should read:
 
 ## Continue Protocol for Next Session
 
-**Before any implementation, trace the data flow:**
+**Before any implementation:**
 
-1. For each feature below, run `get_feature(id)` to see current state
-2. Check `linked_workflows` to find related workflows
-3. For each workflow, run `get_workflow(id)` to understand the data flow
+1. Run `get_feature(id)` for EACH feature in the table above
+2. Check `linked_workflows` in each response
+3. For each workflow: run `get_workflow(id)` to understand data flow
 4. Trace: where does data come from → how it transforms → where it goes
 
+**The handoff TEXT is a summary. The FT ENTRIES are the source of truth.**
 **DO NOT speculate about data structures or DB schema. Trace the actual flow.**
 
 ## Read These Memories
@@ -142,10 +150,13 @@ Next session MUST read:
 ## Bug/Issue
 [Clear description]
 
-## Features Affected
+## Features Affected (QUERY THESE)
 | ID | Name | Notes |
 |----|------|-------|
 | AUTH.login | User Login | Bug is here |
+
+**Next session MUST run `get_feature(id)` for each row above.**
+The table is a summary — the FT entry is the source of truth.
 
 ## Root Cause
 [Cause or "Still investigating"]
@@ -158,6 +169,18 @@ Next session MUST read:
 
 ## Next To Try
 - [Specific next step]
+
+## Continue Protocol for Next Session
+
+**Before any implementation:**
+
+1. Run `get_feature(id)` for EACH feature in the table above
+2. Check `linked_workflows` in each response
+3. For each workflow: run `get_workflow(id)` to understand data flow
+4. Trace: where does data come from → how it transforms → where it goes
+
+**The handoff TEXT is a summary. The FT ENTRIES are the source of truth.**
+**DO NOT speculate about data structures or DB schema. Trace the actual flow.**
 
 ## Read These Memories
 Next session should read:
@@ -174,10 +197,13 @@ Next session should read:
 ## Task
 [What was being attempted]
 
-## Features Involved
+## Features Involved (QUERY THESE)
 | ID | Name | Status |
 |----|------|--------|
 | ... | ... | ... |
+
+**Next session MUST run `get_feature(id)` for each row above.**
+The table is a summary — the FT entry is the source of truth.
 
 ## Blocker
 [What's preventing progress]
@@ -187,6 +213,18 @@ Next session should read:
 
 ## Needs
 - [External input/decision needed]
+
+## Continue Protocol for Next Session
+
+**Before any implementation:**
+
+1. Run `get_feature(id)` for EACH feature in the table above
+2. Check `linked_workflows` in each response
+3. For each workflow: run `get_workflow(id)` to understand data flow
+4. Trace: where does data come from → how it transforms → where it goes
+
+**The handoff TEXT is a summary. The FT ENTRIES are the source of truth.**
+**DO NOT speculate about data structures or DB schema. Trace the actual flow.**
 
 ## Read These Memories
 Next session should read:

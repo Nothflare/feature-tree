@@ -33,7 +33,7 @@ class FeatureDB:
 
             -- Standalone FTS5 table (no content sync issues)
             CREATE VIRTUAL TABLE IF NOT EXISTS features_fts USING fts5(
-                id, name, description, technical_notes
+                id, name, description, technical_notes, files, code_symbols
             );
 
             -- Workflows: user-facing experiences (same structure as features)
@@ -61,12 +61,40 @@ class FeatureDB:
         self._migrate_add_column("features", "confidence", "TEXT")
         self._migrate_add_column("workflows", "confidence", "TEXT")
 
+        # Migrate FTS table to include files and code_symbols
+        self._migrate_fts_add_columns()
+
     def _migrate_add_column(self, table: str, column: str, col_type: str):
         """Add column to existing table if it doesn't exist."""
         cursor = self.conn.execute(f"PRAGMA table_info({table})")
         columns = [row[1] for row in cursor.fetchall()]
         if column not in columns:
             self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+            self.conn.commit()
+
+    def _migrate_fts_add_columns(self):
+        """Recreate FTS table if it doesn't have files/code_symbols columns."""
+        # Check if FTS table has the new columns by querying its schema
+        try:
+            # Try to query using one of the new columns - if it fails, migration needed
+            self.conn.execute("SELECT files FROM features_fts LIMIT 0")
+        except Exception:
+            # FTS table exists with old schema - recreate it
+            self.conn.execute("DROP TABLE IF EXISTS features_fts")
+            self.conn.execute("""
+                CREATE VIRTUAL TABLE features_fts USING fts5(
+                    id, name, description, technical_notes, files, code_symbols
+                )
+            """)
+            # Re-sync all features to FTS
+            rows = self.conn.execute(
+                "SELECT id, name, description, technical_notes, files, code_symbols FROM features"
+            ).fetchall()
+            for row in rows:
+                self.conn.execute(
+                    "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols) VALUES (?, ?, ?, ?, ?, ?)",
+                    (row[0], row[1], row[2], row[3], row[4], row[5])
+                )
             self.conn.commit()
 
     def _sync_fts(self, feature_id: str, delete_only: bool = False):
@@ -79,13 +107,13 @@ class FeatureDB:
         if not delete_only:
             # Insert current data
             row = self.conn.execute(
-                "SELECT id, name, description, technical_notes FROM features WHERE id = ?",
+                "SELECT id, name, description, technical_notes, files, code_symbols FROM features WHERE id = ?",
                 (feature_id,)
             ).fetchone()
             if row:
                 self.conn.execute(
-                    "INSERT INTO features_fts (id, name, description, technical_notes) VALUES (?, ?, ?, ?)",
-                    (row["id"], row["name"], row["description"], row["technical_notes"])
+                    "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols) VALUES (?, ?, ?, ?, ?, ?)",
+                    (row["id"], row["name"], row["description"], row["technical_notes"], row["files"], row["code_symbols"])
                 )
 
     def execute(self, sql: str, params: tuple = ()):
