@@ -145,7 +145,7 @@ Use BEFORE any implementation work:
 - "What feature owns this code?" → search by file/symbol name
 - "What shared utilities exist?" → search "INFRA"
 
-Searches across: id, name, description, technical_notes, files, code_symbols
+Searches across: id, name, description, technical_notes, files, code_symbols, commit_ids
 
 ### search_workflows(query)
 Use for understanding user impact:

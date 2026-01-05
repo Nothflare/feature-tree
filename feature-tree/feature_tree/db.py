@@ -34,7 +34,7 @@ class FeatureDB:
 
             -- Standalone FTS5 table (no content sync issues)
             CREATE VIRTUAL TABLE IF NOT EXISTS features_fts USING fts5(
-                id, name, description, technical_notes, files, code_symbols
+                id, name, description, technical_notes, files, code_symbols, commit_ids
             );
 
             -- Workflows: user-facing experiences (same structure as features)
@@ -74,12 +74,12 @@ class FeatureDB:
             self.conn.commit()
 
     def _migrate_fts_add_columns(self):
-        """Recreate FTS table if it doesn't have files/code_symbols columns or needs re-sync."""
+        """Recreate FTS table if it doesn't have all required columns."""
         needs_rebuild = False
 
-        # Check if FTS table has the new columns
+        # Check if FTS table has all columns (files, code_symbols, commit_ids)
         try:
-            self.conn.execute("SELECT files FROM features_fts LIMIT 0")
+            self.conn.execute("SELECT files, code_symbols, commit_ids FROM features_fts LIMIT 0")
         except Exception:
             needs_rebuild = True
 
@@ -87,7 +87,7 @@ class FeatureDB:
             self.conn.execute("DROP TABLE IF EXISTS features_fts")
             self.conn.execute("""
                 CREATE VIRTUAL TABLE features_fts USING fts5(
-                    id, name, description, technical_notes, files, code_symbols
+                    id, name, description, technical_notes, files, code_symbols, commit_ids
                 )
             """)
             self._resync_all_fts()
@@ -97,14 +97,15 @@ class FeatureDB:
         """Re-sync all features to FTS index (used by migration and manual refresh)."""
         self.conn.execute("DELETE FROM features_fts")
         rows = self.conn.execute(
-            "SELECT id, name, description, technical_notes, files, code_symbols FROM features"
+            "SELECT id, name, description, technical_notes, files, code_symbols, commit_ids FROM features"
         ).fetchall()
         for row in rows:
             files_text = self._json_to_text(row[4])
             symbols_text = self._json_to_text(row[5])
+            commits_text = self._json_to_text(row[6])
             self.conn.execute(
-                "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols) VALUES (?, ?, ?, ?, ?, ?)",
-                (row[0], row[1], row[2], row[3], files_text, symbols_text)
+                "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols, commit_ids) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (row[0], row[1], row[2], row[3], files_text, symbols_text, commits_text)
             )
 
     def _json_to_text(self, json_str: str | None) -> str | None:
@@ -127,16 +128,17 @@ class FeatureDB:
         if not delete_only:
             # Insert current data
             row = self.conn.execute(
-                "SELECT id, name, description, technical_notes, files, code_symbols FROM features WHERE id = ?",
+                "SELECT id, name, description, technical_notes, files, code_symbols, commit_ids FROM features WHERE id = ?",
                 (feature_id,)
             ).fetchone()
             if row:
                 # Convert JSON arrays to space-separated text for FTS
                 files_text = self._json_to_text(row["files"])
                 symbols_text = self._json_to_text(row["code_symbols"])
+                commits_text = self._json_to_text(row["commit_ids"])
                 self.conn.execute(
-                    "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols) VALUES (?, ?, ?, ?, ?, ?)",
-                    (row["id"], row["name"], row["description"], row["technical_notes"], files_text, symbols_text)
+                    "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols, commit_ids) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (row["id"], row["name"], row["description"], row["technical_notes"], files_text, symbols_text, commits_text)
                 )
 
     def execute(self, sql: str, params: tuple = ()):
@@ -271,8 +273,8 @@ class FeatureDB:
             rows = self.conn.execute(
                 """SELECT * FROM features
                    WHERE status != 'deleted'
-                   AND (name LIKE ? OR description LIKE ? OR technical_notes LIKE ? OR files LIKE ? OR code_symbols LIKE ?)""",
-                (like_query, like_query, like_query, like_query, like_query)
+                   AND (name LIKE ? OR description LIKE ? OR technical_notes LIKE ? OR files LIKE ? OR code_symbols LIKE ? OR commit_ids LIKE ?)""",
+                (like_query, like_query, like_query, like_query, like_query, like_query)
             ).fetchall()
             return [dict(row) for row in rows]
 
