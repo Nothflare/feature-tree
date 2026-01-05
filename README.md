@@ -2,81 +2,64 @@
 
 A semantic layer connecting human intent and AI implementation.
 
-## The Problem
+## Why Use Feature Tree?
 
-AI handles implementation. Humans move to abstract levels (product vision, taste, specification). But there's no unified protocol connecting them.
+### The Problem You Have
 
-**The gap:**
-- Context window limits what AI can hold
-- Human thinks "what should exist" / AI thinks "what code to write"
-- No shared language between product intent and code structure
-- Sessions restart cold, losing accumulated understanding
+Without Feature Tree, every session you:
+- **Re-discover** which files implement which features
+- **Break things** because you don't know what depends on what
+- **Duplicate work** by recreating features that already exist
+- **Lose context** when sessions restart
 
-## The Solution
+### What Feature Tree Gives You
 
-Two parallel trees that speak both human and AI:
+| Before | After |
+|--------|-------|
+| "Which file handles login?" → grep, guess, hope | `search_features("login")` → AUTH.login → files: [src/auth/login.ts] |
+| "What breaks if I change this?" → no idea | `get_feature("INFRA.database")` → used_by: [AUTH.login, CART.checkout, ...] |
+| "Does this feature exist?" → search codebase | `search_features("password reset")` → shows if it exists with status |
+| "What's the user flow?" → reverse-engineer from code | `get_workflow("USER_ONBOARDING.signup")` → full journey with dependencies |
 
-| Tree | Speaks to | Contains |
-|------|-----------|----------|
-| **Features** | AI (code) | Symbols, files, technical notes |
-| **Workflows** | Human (product) | User journeys, flows, dependencies |
+### Concrete Benefits
 
-The explicit mapping between them is the protocol:
-- Modify a feature → see which workflows break
-- Design a workflow → see what features exist vs. need building
+1. **Instant Context**: `search_features("auth")` returns all auth features with their files, symbols, and status in one call
+2. **Impact Analysis**: Before changing `INFRA.rate_limiter`, see exactly what depends on it
+3. **No Duplicates**: Search before creating - know what exists
+4. **Cross-Session Memory**: Features persist across sessions - no re-explaining
 
 ## Core Concepts
+
+### Two Trees
+
+| Tree | Purpose | Searchable Fields |
+|------|---------|-------------------|
+| **Features** | Code units (what to implement) | id, name, description, files, code_symbols, commit_ids |
+| **Workflows** | User journeys (how features compose) | id, name, description, purpose, depends_on |
+
+The link between them is the power:
+- `get_feature("AUTH.login")` → shows `linked_workflows` (what user journeys use this)
+- `get_workflow("USER_ONBOARDING.signup")` → shows `linked_features` with status (what's done vs planned)
 
 ### Atomic Features
 
 Features are small, implementable units. NOT categories.
 
 ```
-BAD:  "User Authentication" (category - can't implement in one task)
-GOOD: "User Login", "Email Verification", "Password Reset" (atomic)
+BAD:  "User Authentication" (too broad)
+GOOD: AUTH.login, AUTH.register, AUTH.password_reset (atomic, implementable)
 ```
 
-**Rule:** If you can't "implement this feature" and get a complete, testable unit - it's not atomic enough.
+### Infrastructure (INFRA.*)
 
-### Track Symbols, Files, Notes
-
-Every 1x effort noting these = 10x saved later.
-
-| Field | Purpose | Example |
-|-------|---------|---------|
-| Symbols | LSP-queryable identifiers | `handleLogin`, `UserSession` |
-| Files | Paths involved | `src/auth/login.ts` |
-| Notes | What code can't capture | "Uses Redis for rate limiting" |
-
-Without tracking: Claude guesses → inconsistent code → hours debugging.
-
-### Workflows
-
-Workflows = user-facing experiences, structured like features.
-
-Use ID hierarchy (same as features):
-```
-USER_ONBOARDING              → journey (parent)
-USER_ONBOARDING.signup       → flow (child) → depends on [AUTH.register, AUTH.email_verify]
-USER_ONBOARDING.first_buy    → flow (child) → depends on [CART.add, PAYMENT.stripe]
-```
-
-### Infrastructure
-
-Shared utilities (rate limiters, caching, logging) use the `INFRA.*` naming convention:
+Shared utilities use the `INFRA.*` naming convention:
 
 ```
 INFRA.rate_limiter     → shared infrastructure
-INFRA.redis_cache      → shared infrastructure
-AUTH.login             → feature that uses [INFRA.rate_limiter, INFRA.redis_cache]
+AUTH.login             → uses: [INFRA.rate_limiter]
 ```
 
-Features can declare `uses` to link to infrastructure (or other features):
-- `update_feature(id="AUTH.login", uses=["INFRA.rate_limiter"])`
-- `get_feature("AUTH.login")` shows `uses_features` (forward lookup)
-- `get_feature("INFRA.rate_limiter")` shows `used_by_features` (reverse lookup)
-
-No separate type field - just features with `INFRA.*` IDs.
+Call `get_feature("INFRA.rate_limiter")` → see `used_by_features` (everything that depends on it).
 
 ## Installation
 
@@ -87,59 +70,105 @@ No separate type field - just features with `INFRA.*` IDs.
 # Restart Claude Code
 ```
 
-## Plugins
+## Session Support
 
-| Plugin | Description |
-|--------|-------------|
-| **feature-tree** | MCP tools + `/bootstrap` skill |
-| **ft-mem** | Session continuity (handoff, memories, onboarding) |
+When multiple Claude sessions work on different projects simultaneously:
+
+```
+# Hook injects session ID into context:
+FT_SESSION=1
+
+# Pass to all tools:
+search_features("auth", s=1)
+add_feature(id="AUTH.login", name="Login", s=1)
+```
+
+This prevents cross-project data corruption.
 
 ## MCP Tools
 
 ### Features
 
-| Tool | Description |
-|------|-------------|
-| `search_features(query)` | Fuzzy search, shows confidence |
-| `get_feature(id)` | Full details + workflows + uses |
-| `add_feature(id, name, uses?, confidence?, ...)` | Create feature |
-| `update_feature(id, uses?, confidence?, ...)` | Track symbols, files, status |
-| `delete_feature(id)` | Hard if planned, soft if in-progress/done |
+| Tool | When to Use | Benefit |
+|------|-------------|---------|
+| `search_features(query)` | **BEFORE implementing anything** | Find existing features, avoid duplicates |
+| `get_feature(id)` | **BEFORE modifying code** | See dependencies, linked workflows, impact |
+| `add_feature(id, name, ...)` | When creating new functionality | Track from the start |
+| `update_feature(id, files, code_symbols, ...)` | **AFTER implementing** | Future sessions find code instantly |
+| `delete_feature(id)` | Removing functionality | Clean up (soft-delete if in-progress) |
+
+**Search finds:** id, name, description, technical_notes, files, code_symbols, commit_ids
 
 ### Workflows
 
-| Tool | Description |
+| Tool | When to Use | Benefit |
+|------|-------------|---------|
+| `search_workflows(query)` | Understanding user impact | Find journeys that touch an area |
+| `get_workflow(id)` | Before implementing a flow | See what features exist vs need building |
+| `add_workflow(id, name, depends_on, ...)` | Designing user journeys | Track the full experience |
+| `update_workflow(id, ...)` | Refining flows | Keep journeys accurate |
+| `delete_workflow(id)` | Removing flows | Clean up |
+
+**Search finds:** id, name, description, purpose, depends_on (feature IDs)
+
+### Utility
+
+| Tool | When to Use |
 |------|-------------|
-| `search_workflows(query)` | Fuzzy search, shows confidence |
-| `get_workflow(id)` | Full details + linked features |
-| `add_workflow(id, name, depends_on?, mermaid?, confidence?)` | Create workflow |
-| `update_workflow(id, confidence?, ...)` | Update status, depends_on, mermaid |
-| `delete_workflow(id)` | Hard if planned, soft if in-progress/done |
+| `resync_fts()` | If search returns empty but features exist |
+| `debug_cwd()` | Debugging path/session issues |
 
-### Bootstrap
+## Skills
 
-| Tool | Description |
-|------|-------------|
-| `bootstrap_log(message, category)` | Append to bootstrap-log.md |
-
-## Skills & Commands
-
-### feature-tree
-
-| Skill/Command | Description |
-|---------------|-------------|
-| `/bootstrap` | Two-phase codebase analysis (features → workflows) |
-| `/brainstorm` | Three-phase design: Discovery → Design → Specification |
-| `/executing-plans` | Execute designs feature-by-feature with batch commits |
-| `/commit` | Commit with feature tree update |
-
-### ft-mem
-
-| Skill/Command | Description |
-|---------------|-------------|
-| `/ft-mem:onboarding` | First-time setup (CONTEXT.md + memories) |
+| Skill | Purpose |
+|-------|---------|
+| `/feature-tree:bootstrap` | Analyze codebase → discover features → trace workflows |
+| `/feature-tree:brainstorm` | Design new features through structured discovery |
+| `/feature-tree:executing-plans` | Execute implementation plans with commits |
+| `/feature-tree:commit` | Commit with automatic feature tree update |
+| `/ft-mem:onboarding` | First-time project setup |
 | `/ft-mem:handoff` | Save context before /clear |
-| `/ft-mem:brainstorm-sync` | Sync brainstorming discoveries to memory |
+
+## Usage Protocol
+
+### Before ANY Implementation
+
+```python
+# 1. Check if feature exists
+search_features("login")
+
+# 2. If modifying existing, check impact
+get_feature("AUTH.login")
+# → See used_by_features, linked_workflows
+
+# 3. Check related workflows
+search_workflows("login")
+```
+
+### During Implementation
+
+```python
+# Create feature BEFORE coding
+add_feature(id="AUTH.login", name="User Login", status="planned")
+
+# Start work
+update_feature(id="AUTH.login", status="in-progress")
+
+# Track as you go
+update_feature(id="AUTH.login",
+    files=["src/auth/login.ts"],
+    code_symbols=["handleLogin", "LoginRequest"])
+```
+
+### After Implementation
+
+```python
+# Use the commit skill (bundles git + FT update)
+/feature-tree:commit
+
+# Or manually
+update_feature(id="AUTH.login", status="done", commit_ids=["abc123"])
+```
 
 ## Storage
 
@@ -147,31 +176,9 @@ No separate type field - just features with `INFRA.*` IDs.
 .feat-tree/
 ├── features.db      # SQLite + FTS5
 ├── FEATURES.md      # Auto-generated
-├── WORKFLOWS.md     # Auto-generated (with mermaid)
-├── CONTEXT.md       # Product context (created by onboarding)
+├── WORKFLOWS.md     # Auto-generated
+├── CONTEXT.md       # Product context
 └── memories/        # Session continuity
-```
-
-## Feature Lifecycle
-
-```
-planned → in-progress → done
-   ↓
-hard delete (no trace)    soft delete (recoverable)
-```
-
-## Usage
-
-```
-Human: Add user signup flow
-
-Claude: [search_features("signup")] - checking existing
-        [add_workflow(id="USER_ONBOARDING.signup", name="Signup Flow", depends_on=[...])]
-        [add_feature(id="AUTH.register", name="User Registration")]
-
-        Implementing...
-        [update_feature(id="AUTH.register", status="in-progress",
-                       code_symbols=["registerUser"], files=["src/auth/register.ts"])]
 ```
 
 ## Requirements
