@@ -58,26 +58,6 @@ These steps are MANDATORY. Do not skip them.
 
 ---
 
-## DATA FLOW TRACING (MANDATORY)
-
-Before implementing, trace the actual data flow:
-
-1. Find the entry point (route, handler, command)
-2. Trace what data comes in (request shape)
-3. Trace what happens to the data (transformations)
-4. Trace what data goes out (response shape)
-5. Check linked_workflows for the full journey
-
-**NEVER speculate about:**
-- Database schema → read the actual schema
-- Request/response shapes → read the actual types
-- State structure → read the actual store
-- API contracts → read the actual endpoints
-
-**If you don't know, ASK or READ. Don't guess.**
-
----
-
 ## IMPACT ANALYSIS (BEFORE ANY CHANGE)
 
 Before modifying existing code:
@@ -317,7 +297,10 @@ def resync_fts(s: int | None = None) -> str:
 
 @mcp.tool()
 def search_features(query: str, s: int | None = None) -> str:
-    """Fuzzy search features by name, description, or technical notes. Use before starting work to understand what exists."""
+    """Fuzzy search features by name, description, or technical notes. Use before starting work to understand what exists.
+
+    Searches: id, name, description, technical_notes, files, code_symbols, commit_ids.
+    Returns: id, name, status, uses_count, confidence."""
     db = get_db(s)
     try:
         results = db.search_features(query)
@@ -411,7 +394,10 @@ def update_feature(
 
 @mcp.tool()
 def get_feature(id: str, s: int | None = None) -> str:
-    """Get full details of a single feature by ID, including linked workflows and used features."""
+    """Get full details of a feature. Use BEFORE modifying to see impact.
+
+    Returns: All fields + uses_features, used_by_features, linked_workflows.
+    Check used_by_features before changing INFRA.* - many things may depend on it."""
     db = get_db(s)
     try:
         feature = db.get_feature(id)
@@ -463,7 +449,10 @@ def delete_feature(id: str, s: int | None = None) -> str:
 
 @mcp.tool()
 def search_workflows(query: str, s: int | None = None) -> str:
-    """Fuzzy search workflows by name, description, or purpose."""
+    """Fuzzy search workflows. Use to find user journeys that would break if you change a feature.
+
+    Searches: id, name, description, purpose, depends_on (feature IDs).
+    Example: search_workflows("AUTH.login") finds workflows using that feature."""
     db = get_db(s)
     try:
         results = db.search_workflows(query)
@@ -518,7 +507,9 @@ def add_workflow(
 
 @mcp.tool()
 def get_workflow(id: str, s: int | None = None) -> str:
-    """Get full details of a workflow by ID, including linked features."""
+    """Get workflow details. Check linked_features status to see if workflow is implementable.
+
+    Returns: All fields + linked_features with their status (done/planned/in-progress)."""
     db = get_db(s)
     try:
         workflow = db.get_workflow(id)
