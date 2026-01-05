@@ -19,6 +19,11 @@ Two parallel trees that enable impact analysis and context continuity:
 - **Features** = atomic code units (what gets implemented)
 - **Workflows** = user-facing experiences (how features compose)
 
+## SESSION
+
+If you see `FT_SESSION=N` in context, pass `_s=N` to all Feature Tree tools.
+This ensures data goes to the correct project when multiple sessions run concurrently.
+
 ## KEY MANTRAS
 
 1. **"Workflows are the source of truth for data flow"**
@@ -228,14 +233,29 @@ add_feature(id="AUTH.login", uses=["INFRA.rate_limiter", "INFRA.database"])
 planned → in-progress → done (or deleted)
 """
 
-def get_project_root() -> Path:
-    """Get project root from hook-written file, fallback to cwd."""
-    current_project_file = Path.home() / ".feat-tree" / "current-project"
+def get_project_root(session_id: int | None = None) -> Path:
+    """Get project root from session ID or fallback chain."""
+    feat_tree_home = Path.home() / ".feat-tree"
+
+    # 1. Session ID lookup (supports concurrent sessions)
+    if session_id is not None:
+        session_file = feat_tree_home / "sessions" / f"{session_id}.json"
+        if session_file.exists():
+            try:
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+                return Path(data["project"])
+            except Exception:
+                pass
+
+    # 2. Hook-written file (backwards compatibility)
+    current_project_file = feat_tree_home / "current-project"
     if current_project_file.exists():
         try:
             return Path(current_project_file.read_text(encoding="utf-8").strip())
         except Exception:
             pass
+
+    # 3. Fallback to cwd
     return Path(os.getcwd())
 
 mcp = FastMCP(
@@ -244,21 +264,21 @@ mcp = FastMCP(
 )
 
 
-def get_feat_tree_dir() -> Path:
+def get_feat_tree_dir(session_id: int | None = None) -> Path:
     """Get the .feat-tree directory, creating if needed."""
-    feat_tree_dir = get_project_root() / ".feat-tree"
+    feat_tree_dir = get_project_root(session_id) / ".feat-tree"
     feat_tree_dir.mkdir(exist_ok=True)
     return feat_tree_dir
 
 
-def get_db() -> FeatureDB:
-    db_path = get_feat_tree_dir() / "features.db"
+def get_db(session_id: int | None = None) -> FeatureDB:
+    db_path = get_feat_tree_dir(session_id) / "features.db"
     return FeatureDB(str(db_path))
 
 
-def regenerate_markdown():
-    db = get_db()
-    feat_tree_dir = get_feat_tree_dir()
+def regenerate_markdown(session_id: int | None = None):
+    db = get_db(session_id)
+    feat_tree_dir = get_feat_tree_dir(session_id)
 
     # Generate FEATURES.md
     features_md = generate_features_markdown(db)
@@ -280,9 +300,9 @@ def debug_cwd() -> str:
 
 
 @mcp.tool()
-def resync_fts() -> str:
+def resync_fts(_s: int | None = None) -> str:
     """Rebuild FTS search index. Use if file/symbol search returns empty results."""
-    db = get_db()
+    db = get_db(_s)
     try:
         db._resync_all_fts()
         db.conn.commit()
@@ -292,9 +312,9 @@ def resync_fts() -> str:
 
 
 @mcp.tool()
-def search_features(query: str) -> str:
+def search_features(query: str, _s: int | None = None) -> str:
     """Fuzzy search features by name, description, or technical notes. Use before starting work to understand what exists."""
-    db = get_db()
+    db = get_db(_s)
     try:
         results = db.search_features(query)
         # Trim to essential fields only
@@ -320,10 +340,11 @@ def add_feature(
     parent_id: str | None = None,
     description: str | None = None,
     uses: list[str] | None = None,
-    confidence: str | None = None
+    confidence: str | None = None,
+    _s: int | None = None
 ) -> str:
     """Create a new feature. Use when human describes something new."""
-    db = get_db()
+    db = get_db(_s)
     try:
         # Validate uses references
         warnings = []
@@ -333,7 +354,7 @@ def add_feature(
                     warnings.append(f"uses references non-existent feature '{ref_id}'")
 
         db.add_feature(id=id, name=name, parent_id=parent_id, description=description, uses=uses, confidence=confidence)
-        regenerate_markdown()
+        regenerate_markdown(_s)
 
         result = {"ok": True}
         if warnings:
@@ -353,10 +374,11 @@ def update_feature(
     technical_notes: str | None = None,
     description: str | None = None,
     uses: list[str] | None = None,
-    confidence: str | None = None
+    confidence: str | None = None,
+    _s: int | None = None
 ) -> str:
     """Update a feature. ALWAYS record code_symbols + files after implementing. 1x effort now = 10x saved later."""
-    db = get_db()
+    db = get_db(_s)
     try:
         fields = {}
         if status is not None:
@@ -377,16 +399,16 @@ def update_feature(
             fields["confidence"] = confidence
 
         db.update_feature(id, **fields)
-        regenerate_markdown()
+        regenerate_markdown(_s)
         return '{"ok":true}'
     finally:
         db.close()
 
 
 @mcp.tool()
-def get_feature(id: str) -> str:
+def get_feature(id: str, _s: int | None = None) -> str:
     """Get full details of a single feature by ID, including linked workflows and used features."""
-    db = get_db()
+    db = get_db(_s)
     try:
         feature = db.get_feature(id)
         if feature:
@@ -421,13 +443,13 @@ def get_feature(id: str) -> str:
 
 
 @mcp.tool()
-def delete_feature(id: str) -> str:
+def delete_feature(id: str, _s: int | None = None) -> str:
     """Delete a feature. Hard-deletes if planned, soft-deletes if in-progress/done."""
-    db = get_db()
+    db = get_db(_s)
     try:
         result = db.delete_feature(id)
         if result.get("ok"):
-            regenerate_markdown()
+            regenerate_markdown(_s)
         return json.dumps(result)
     finally:
         db.close()
@@ -436,9 +458,9 @@ def delete_feature(id: str) -> str:
 # ==================== WORKFLOWS ====================
 
 @mcp.tool()
-def search_workflows(query: str) -> str:
+def search_workflows(query: str, _s: int | None = None) -> str:
     """Fuzzy search workflows by name, description, or purpose."""
-    db = get_db()
+    db = get_db(_s)
     try:
         results = db.search_workflows(query)
         trimmed = []
@@ -461,10 +483,11 @@ def add_workflow(
     purpose: str | None = None,
     depends_on: list[str] | None = None,
     mermaid: str | None = None,
-    confidence: str | None = None
+    confidence: str | None = None,
+    _s: int | None = None
 ) -> str:
     """Create a workflow. Use ID hierarchy: JOURNEY.flow (like features). depends_on links to feature IDs."""
-    db = get_db()
+    db = get_db(_s)
     try:
         # Validate depends_on references
         warnings = []
@@ -479,7 +502,7 @@ def add_workflow(
             depends_on=depends_on, mermaid=mermaid,
             confidence=confidence
         )
-        regenerate_markdown()
+        regenerate_markdown(_s)
 
         result = {"ok": True}
         if warnings:
@@ -490,9 +513,9 @@ def add_workflow(
 
 
 @mcp.tool()
-def get_workflow(id: str) -> str:
+def get_workflow(id: str, _s: int | None = None) -> str:
     """Get full details of a workflow by ID, including linked features."""
-    db = get_db()
+    db = get_db(_s)
     try:
         workflow = db.get_workflow(id)
         if workflow:
@@ -516,10 +539,11 @@ def update_workflow(
     mermaid: str | None = None,
     description: str | None = None,
     purpose: str | None = None,
-    confidence: str | None = None
+    confidence: str | None = None,
+    _s: int | None = None
 ) -> str:
     """Update a workflow's fields."""
-    db = get_db()
+    db = get_db(_s)
     try:
         fields = {}
         if status is not None:
@@ -536,20 +560,20 @@ def update_workflow(
             fields["confidence"] = confidence
 
         db.update_workflow(id, **fields)
-        regenerate_markdown()
+        regenerate_markdown(_s)
         return '{"ok":true}'
     finally:
         db.close()
 
 
 @mcp.tool()
-def delete_workflow(id: str) -> str:
+def delete_workflow(id: str, _s: int | None = None) -> str:
     """Delete a workflow. Hard if planned, soft if in-progress/done."""
-    db = get_db()
+    db = get_db(_s)
     try:
         result = db.delete_workflow(id)
         if result.get("ok"):
-            regenerate_markdown()
+            regenerate_markdown(_s)
         return json.dumps(result)
     finally:
         db.close()
