@@ -8,18 +8,15 @@ Save context so next Claude continues seamlessly. Handoff depth depends on task 
 
 ## Steps
 
-### 1. Check Feature Tree Changes
+### 1. Record Feature Tree Changes
 
-**List features created or modified this session:**
+**List features/workflows YOU created or modified this session.**
 
-```
-search_features("*")  # or relevant query
-```
-
-Record any features you:
-- Created (add_feature)
-- Modified (update_feature)
-- Changed status on
+You already know what you did — it's in your context. Record:
+- Features you created (add_feature)
+- Features you modified (update_feature)
+- Workflows you created/modified
+- Status changes
 
 This prevents next Claude from recreating features that already exist.
 
