@@ -73,29 +73,48 @@ class FeatureDB:
             self.conn.commit()
 
     def _migrate_fts_add_columns(self):
-        """Recreate FTS table if it doesn't have files/code_symbols columns."""
-        # Check if FTS table has the new columns by querying its schema
+        """Recreate FTS table if it doesn't have files/code_symbols columns or needs re-sync."""
+        needs_rebuild = False
+
+        # Check if FTS table has the new columns
         try:
-            # Try to query using one of the new columns - if it fails, migration needed
             self.conn.execute("SELECT files FROM features_fts LIMIT 0")
         except Exception:
-            # FTS table exists with old schema - recreate it
+            needs_rebuild = True
+
+        if needs_rebuild:
             self.conn.execute("DROP TABLE IF EXISTS features_fts")
             self.conn.execute("""
                 CREATE VIRTUAL TABLE features_fts USING fts5(
                     id, name, description, technical_notes, files, code_symbols
                 )
             """)
-            # Re-sync all features to FTS
-            rows = self.conn.execute(
-                "SELECT id, name, description, technical_notes, files, code_symbols FROM features"
-            ).fetchall()
-            for row in rows:
-                self.conn.execute(
-                    "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols) VALUES (?, ?, ?, ?, ?, ?)",
-                    (row[0], row[1], row[2], row[3], row[4], row[5])
-                )
+            self._resync_all_fts()
             self.conn.commit()
+
+    def _resync_all_fts(self):
+        """Re-sync all features to FTS index (used by migration and manual refresh)."""
+        self.conn.execute("DELETE FROM features_fts")
+        rows = self.conn.execute(
+            "SELECT id, name, description, technical_notes, files, code_symbols FROM features"
+        ).fetchall()
+        for row in rows:
+            files_text = self._json_to_text(row[4])
+            symbols_text = self._json_to_text(row[5])
+            self.conn.execute(
+                "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols) VALUES (?, ?, ?, ?, ?, ?)",
+                (row[0], row[1], row[2], row[3], files_text, symbols_text)
+            )
+
+    def _json_to_text(self, json_str: str | None) -> str | None:
+        """Convert JSON array to space-separated text for FTS indexing."""
+        if not json_str:
+            return None
+        try:
+            items = json.loads(json_str)
+            return " ".join(items) if items else None
+        except (json.JSONDecodeError, TypeError):
+            return json_str
 
     def _sync_fts(self, feature_id: str, delete_only: bool = False):
         """Sync a single feature to FTS index."""
@@ -111,9 +130,12 @@ class FeatureDB:
                 (feature_id,)
             ).fetchone()
             if row:
+                # Convert JSON arrays to space-separated text for FTS
+                files_text = self._json_to_text(row["files"])
+                symbols_text = self._json_to_text(row["code_symbols"])
                 self.conn.execute(
                     "INSERT INTO features_fts (id, name, description, technical_notes, files, code_symbols) VALUES (?, ?, ?, ?, ?, ?)",
-                    (row["id"], row["name"], row["description"], row["technical_notes"], row["files"], row["code_symbols"])
+                    (row["id"], row["name"], row["description"], row["technical_notes"], files_text, symbols_text)
                 )
 
     def execute(self, sql: str, params: tuple = ()):

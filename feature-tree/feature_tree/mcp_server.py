@@ -280,6 +280,18 @@ def debug_cwd() -> str:
 
 
 @mcp.tool()
+def resync_fts() -> str:
+    """Rebuild FTS search index. Use if file/symbol search returns empty results."""
+    db = get_db()
+    try:
+        db._resync_all_fts()
+        db.conn.commit()
+        return '{"ok":true,"message":"FTS index rebuilt"}'
+    finally:
+        db.close()
+
+
+@mcp.tool()
 def search_features(query: str) -> str:
     """Fuzzy search features by name, description, or technical notes. Use before starting work to understand what exists."""
     db = get_db()
