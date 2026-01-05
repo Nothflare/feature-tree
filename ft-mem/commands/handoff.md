@@ -67,6 +67,17 @@ Create `.feat-tree/memories/handoff.md` using appropriate template:
 ## Notes for Future
 - [Any gotchas discovered]
 
+## Continue Protocol for Next Session
+
+**Before any implementation, trace the data flow:**
+
+1. For each feature below, run `get_feature(id)` to see current state
+2. Check `linked_workflows` to find related workflows
+3. For each workflow, run `get_workflow(id)` to understand the data flow
+4. Trace: where does data come from → how it transforms → where it goes
+
+**DO NOT speculate about data structures or DB schema. Trace the actual flow.**
+
 ## Read These Memories
 Next session should read:
 - `.feat-tree/memories/[relevant_memory].md` - [why it's helpful]
@@ -103,6 +114,17 @@ Next session should read:
 
 ## Watch Out For
 - [Gotcha or edge case discovered]
+
+## Continue Protocol for Next Session
+
+**Before any implementation, trace the data flow:**
+
+1. For each feature below, run `get_feature(id)` to see current state
+2. Check `linked_workflows` to find related workflows
+3. For each workflow, run `get_workflow(id)` to understand the data flow
+4. Trace: where does data come from → how it transforms → where it goes
+
+**DO NOT speculate about data structures or DB schema. Trace the actual flow.**
 
 ## Read These Memories
 Next session MUST read:

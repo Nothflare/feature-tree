@@ -15,69 +15,117 @@ from feature_tree.markdown import generate_features_markdown, generate_workflows
 SERVER_INSTRUCTIONS = """
 # Feature Tree
 
-Two parallel trees: Features (atomic code units) and Workflows (user-facing experiences).
+Two parallel trees that enable impact analysis and context continuity:
+- **Features** = atomic code units (what gets implemented)
+- **Workflows** = user-facing experiences (how features compose)
 
-## ATOMIC FEATURES
+## WHEN TO USE EACH TOOL
 
-Features are small, implementable units. NOT categories.
+### search_features(query)
+Use BEFORE any implementation work:
+- "Does this feature already exist?" → search before creating
+- "What feature owns this code?" → search by file/symbol name
+- "What shared utilities exist?" → search "INFRA"
+- "What depends on authentication?" → search "auth" then check used_by
 
-BAD: "User Authentication" (category - can't implement in one task)
-GOOD: "User Login", "Email Verification", "Password Reset" (atomic - one task each)
+Searches across: id, name, description, technical_notes
 
-Rule: If you can't "implement this feature" and get a complete, testable unit - it's not atomic enough.
+### search_workflows(query)
+Use for understanding user impact:
+- "What user journeys exist?" → search by domain
+- "If I break this, what flows fail?" → search to find affected workflows
+- "What's the current UX for X?" → search by user action
 
-## WHY TRACK SYMBOLS, FILES, NOTES
+Searches across: id, name, description, purpose
 
-Every 1x effort noting these = 10x saved later.
+### get_feature(id) — Full Context
+Returns everything about a feature:
+- **uses_features**: What this feature depends on (forward)
+- **used_by_features**: What depends on this feature (reverse)
+- **linked_workflows**: Which workflows use this feature
 
-| Field | Purpose | Example |
-|-------|---------|---------|
-| Symbols | LSP-queryable identifiers | handleLogin, UserSession |
-| Files | Paths involved | src/auth/login.ts |
-| Notes | What code can't capture | "Uses Redis for rate limiting" |
+Use for impact analysis:
+- Changing AUTH.login? Check `used_by_features` AND `linked_workflows`
+- Refactoring INFRA.*? Check both — many features AND workflows may break
 
-Without tracking: You guess → inconsistent code → hours debugging.
-With tracking: Query symbols → read only relevant files → precise edits.
+### get_workflow(id) — Workflow Readiness
+Returns workflow details plus:
+- **linked_features**: Features with their STATUS
 
-DO NOT skip this. It's what keeps the codebase flexible as it grows.
+Use to check if workflow is implementable:
+- All features "done"? → workflow is ready
+- Some features "planned"? → workflow is blocked, implement features first
+
+## FEATURES
+
+Atomic, implementable units. NOT categories.
+
+| Bad | Good |
+|-----|------|
+| "User Authentication" (category) | AUTH.login, AUTH.register, AUTH.password_reset |
+| "Database" (too broad) | INFRA.database, INFRA.migrations |
+
+### Key Fields
+| Field | Purpose | When to Use |
+|-------|---------|-------------|
+| `files` | Paths touched | After implementing |
+| `code_symbols` | Functions, classes, exports | After implementing |
+| `technical_notes` | Context code can't capture | "Uses Redis", "Rate limited to 100/min" |
+| `uses` | Dependencies on other features | When feature needs INFRA.* or other features |
+| `commit_ids` | Which commits implemented this | After /feature-tree:commit |
+| `confidence` | How certain (bootstrap) | HIGH=obvious, MEDIUM=inferred, LOW=uncertain |
+
+### Hierarchy
+Use `parent_id` for grouping: AUTH is parent, AUTH.login is child.
+But each child must still be atomic and independently implementable.
 
 ## WORKFLOWS
 
-Workflows = user-facing experiences, structured like features.
+User-facing experiences that compose features.
 
-Use ID hierarchy: `USER_ONBOARDING.signup` (parent.child, like features)
-- Parent = journey (category)
-- Child = flow (atomic)
+Format: `JOURNEY.flow` (e.g., USER_ONBOARDING.signup)
 
-Example: `USER_ONBOARDING.signup` depends on [AUTH.register, AUTH.email_verify]
+### Key Fields
+| Field | Purpose |
+|-------|---------|
+| `purpose` | WHY this workflow exists (user goal) |
+| `description` | WHAT it does (steps involved) |
+| `depends_on` | Feature IDs this workflow needs |
+| `mermaid` | Visual flow diagram |
 
-Why both trees?
-- Features only → technically correct but UX is accidental
-- Workflows only → clear intent but implementation gaps
-- Both → modify a feature, see which workflows break. Design a workflow, see what features exist vs. need building.
+### Why Both Trees?
+- Feature only → technically correct but UX is accidental
+- Workflow only → clear intent but implementation gaps
+- Both → change a feature, see which workflows break
 
-## INFRASTRUCTURE
+## INFRASTRUCTURE (INFRA.*)
 
-Use naming convention `INFRA.*` for shared utilities (rate limiter, cache, etc.)
+Shared utilities: INFRA.database, INFRA.logger, INFRA.rate_limiter, INFRA.config
 
-Features can declare `uses` to link to other features they depend on:
-- AUTH.login uses [INFRA.rate_limiter]
-- get_feature shows both `uses_features` and `used_by_features`
+Features declare dependencies via `uses`:
+```
+add_feature(id="AUTH.login", uses=["INFRA.rate_limiter", "INFRA.database"])
+```
 
-No separate "infra type" - just features with INFRA.* IDs.
+**INFRA.* is high-impact** — always check `used_by_features` before changing.
 
-## Tools
+## DELETE BEHAVIOR
 
-Features: search_features, get_feature, add_feature, update_feature, delete_feature
-Workflows: search_workflows, get_workflow, add_workflow, update_workflow, delete_workflow
+- Status = "planned" → **hard delete** (gone forever)
+- Status = "in-progress" or "done" → **soft delete** (recoverable)
 
-## Protocol
-1. Search before implementing
-2. Features = atomic units, Workflows = compositions
-3. ALWAYS update symbols/files/notes after implementing
-4. When uncertain: ASK
+## PROTOCOL
 
-## Status: planned → in-progress → done (or deleted)
+1. **Before implementing**: search_features + search_workflows to understand context
+2. **Creating new**: add_feature with proper ID, uses, description
+3. **During work**: update_feature with files, symbols, technical_notes, status="in-progress"
+4. **After batch**: Use /feature-tree:commit (bundles git + FT updates)
+5. **Before changing existing**: get_feature → check used_by_features AND linked_workflows
+6. **When uncertain**: ASK
+
+## STATUS LIFECYCLE
+
+planned → in-progress → done (or deleted)
 """
 
 def get_project_root() -> Path:
