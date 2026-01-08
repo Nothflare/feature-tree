@@ -22,12 +22,15 @@ class FeatureDB:
                 name          TEXT NOT NULL,
                 description   TEXT,
                 status        TEXT DEFAULT 'planned',
+                being_modified TEXT DEFAULT 'none',
                 code_symbols  TEXT,
                 files         TEXT,
                 technical_notes TEXT,
                 commit_ids    TEXT,
                 uses          TEXT,
                 confidence    TEXT,
+                important_message TEXT,
+                archived_at   TEXT,
                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -58,20 +61,79 @@ class FeatureDB:
         """)
         self.conn.commit()
         
-        # Migrate existing databases: add confidence column if missing
+        # Migrate existing databases: add columns if missing
         self._migrate_add_column("features", "confidence", "TEXT")
+        self._migrate_add_column("features", "being_modified", "TEXT", default="'none'")
+        self._migrate_add_column("features", "important_message", "TEXT")
+        self._migrate_add_column("features", "archived_at", "TEXT")
         self._migrate_add_column("workflows", "confidence", "TEXT")
 
         # Migrate FTS tables
         self._migrate_fts_add_columns()
         self._migrate_workflow_fts_add_columns()
 
-    def _migrate_add_column(self, table: str, column: str, col_type: str):
+        # v2→v3 migration: status enum + code_symbols format
+        self._migrate_v2_to_v3()
+
+    def _migrate_add_column(self, table: str, column: str, col_type: str, default: str | None = None):
         """Add column to existing table if it doesn't exist."""
         cursor = self.conn.execute(f"PRAGMA table_info({table})")
         columns = [row[1] for row in cursor.fetchall()]
         if column not in columns:
-            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+            default_clause = f" DEFAULT {default}" if default else ""
+            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}{default_clause}")
+            self.conn.commit()
+
+    def _migrate_v2_to_v3(self):
+        """Migrate v2 data to v3 format (idempotent)."""
+        # Check which columns exist
+        cursor = self.conn.execute("PRAGMA table_info(features)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        # Status migration: in_progress → active + building, done → active, deleted → archived
+        if 'status' in columns and 'being_modified' in columns:
+            v2_statuses = self.conn.execute(
+                "SELECT COUNT(*) FROM features WHERE status IN ('in_progress', 'done', 'deleted')"
+            ).fetchone()[0]
+
+            if v2_statuses > 0:
+                # in_progress → active + being_modified=building
+                self.conn.execute("""
+                    UPDATE features
+                    SET status = 'active', being_modified = 'building'
+                    WHERE status = 'in_progress'
+                """)
+                # done → active (being_modified stays 'none')
+                self.conn.execute("UPDATE features SET status = 'active' WHERE status = 'done'")
+                # deleted → archived
+                if 'archived_at' in columns:
+                    self.conn.execute("""
+                        UPDATE features
+                        SET status = 'archived', archived_at = CURRENT_TIMESTAMP
+                        WHERE status = 'deleted'
+                    """)
+                else:
+                    self.conn.execute("UPDATE features SET status = 'archived' WHERE status = 'deleted'")
+                self.conn.commit()
+
+        # code_symbols migration: convert string arrays to structured objects
+        if 'code_symbols' in columns:
+            rows = self.conn.execute("SELECT id, code_symbols FROM features WHERE code_symbols IS NOT NULL").fetchall()
+            for row in rows:
+                try:
+                    symbols = json.loads(row[1])
+                    if symbols and isinstance(symbols[0], str):
+                        # Old format (array of strings), migrate to new format
+                        new_symbols = [
+                            {"name": s, "location": None, "valid": True}
+                            for s in symbols
+                        ]
+                        self.conn.execute(
+                            "UPDATE features SET code_symbols = ? WHERE id = ?",
+                            [json.dumps(new_symbols), row[0]]
+                        )
+                except (json.JSONDecodeError, TypeError, IndexError):
+                    pass
             self.conn.commit()
 
     def _migrate_fts_add_columns(self):
@@ -187,14 +249,23 @@ class FeatureDB:
         description: Optional[str] = None,
         uses: Optional[list[str]] = None,
         confidence: Optional[str] = None,
-        status: str = "planned"
+        status: str = "planned",
+        being_modified: str = "none",
+        important_message: Optional[str] = None,
+        files: Optional[list[str]] = None,
+        code_symbols: Optional[list[dict]] = None,
+        technical_notes: Optional[str] = None
     ) -> dict:
         now = datetime.now(UTC).isoformat()
         uses_json = json.dumps(uses) if uses else None
+        files_json = json.dumps(files) if files else None
+        symbols_json = json.dumps(code_symbols) if code_symbols else None
         self.conn.execute(
-            """INSERT INTO features (id, parent_id, name, description, uses, confidence, status, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (id, parent_id, name, description, uses_json, confidence, status, now, now)
+            """INSERT INTO features (id, parent_id, name, description, uses, confidence, status,
+               being_modified, important_message, files, code_symbols, technical_notes, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, parent_id, name, description, uses_json, confidence, status,
+             being_modified, important_message, files_json, symbols_json, technical_notes, now, now)
         )
         self._sync_fts(id)
         self.conn.commit()
@@ -231,7 +302,7 @@ class FeatureDB:
     def get_features_using(self, feature_id: str) -> list[dict]:
         """Get features that use this feature (reverse lookup)."""
         rows = self.conn.execute(
-            "SELECT * FROM features WHERE status != 'deleted'"
+            "SELECT * FROM features WHERE status != 'archived'"
         ).fetchall()
         result = []
         for row in rows:
@@ -249,9 +320,9 @@ class FeatureDB:
         return [dict(row) for row in rows]
 
     def has_protected_children(self, id: str) -> bool:
-        """Check if feature has children with status in-progress or done."""
+        """Check if feature has children with status active."""
         row = self.conn.execute(
-            "SELECT COUNT(*) FROM features WHERE parent_id = ? AND status IN ('in-progress', 'done')",
+            "SELECT COUNT(*) FROM features WHERE parent_id = ? AND status = 'active'",
             (id,)
         ).fetchone()
         return row[0] > 0
@@ -270,7 +341,7 @@ class FeatureDB:
 
         # Check for protected children
         if self.has_protected_children(id):
-            return {"ok": False, "error": "has children with status in-progress or done"}
+            return {"ok": False, "error": "has children with status active"}
 
         status = feature.get("status", "planned")
 
@@ -278,7 +349,14 @@ class FeatureDB:
             self.hard_delete_feature(id)
             return {"ok": True, "type": "hard"}
         else:
-            self.update_feature(id, status="deleted")
+            # Soft delete: set status to archived with timestamp
+            now = datetime.now(UTC).isoformat()
+            self.conn.execute(
+                "UPDATE features SET status = 'archived', archived_at = ?, updated_at = ? WHERE id = ?",
+                (now, now, id)
+            )
+            self._sync_fts(id)
+            self.conn.commit()
             return {"ok": True, "type": "soft"}
 
     def _normalize_query(self, query: str) -> str:
@@ -294,7 +372,7 @@ class FeatureDB:
             rows = self.conn.execute(
                 """SELECT f.* FROM features f
                    JOIN features_fts fts ON f.id = fts.id
-                   WHERE features_fts MATCH ? AND f.status != 'deleted'
+                   WHERE features_fts MATCH ? AND f.status != 'archived'
                    ORDER BY rank""",
                 (normalized,)
             ).fetchall()
@@ -304,7 +382,7 @@ class FeatureDB:
             like_query = f"%{query}%"
             rows = self.conn.execute(
                 """SELECT * FROM features
-                   WHERE status != 'deleted'
+                   WHERE status != 'archived'
                    AND (name LIKE ? OR description LIKE ? OR technical_notes LIKE ? OR files LIKE ? OR code_symbols LIKE ? OR commit_ids LIKE ?)""",
                 (like_query, like_query, like_query, like_query, like_query, like_query)
             ).fetchall()
@@ -361,7 +439,7 @@ class FeatureDB:
             rows = self.conn.execute(
                 """SELECT w.* FROM workflows w
                    JOIN workflows_fts wfts ON w.id = wfts.id
-                   WHERE workflows_fts MATCH ? AND w.status != 'deleted'
+                   WHERE workflows_fts MATCH ? AND w.status != 'archived'
                    ORDER BY rank""",
                 (normalized,)
             ).fetchall()
@@ -370,7 +448,7 @@ class FeatureDB:
             like_query = f"%{query}%"
             rows = self.conn.execute(
                 """SELECT * FROM workflows
-                   WHERE status != 'deleted'
+                   WHERE status != 'archived'
                    AND (name LIKE ? OR description LIKE ? OR purpose LIKE ? OR depends_on LIKE ?)""",
                 (like_query, like_query, like_query, like_query)
             ).fetchall()
@@ -379,7 +457,7 @@ class FeatureDB:
     def get_workflows_for_feature(self, feature_id: str) -> list[dict]:
         """Get workflows that depend on a feature."""
         rows = self.conn.execute(
-            "SELECT * FROM workflows WHERE status != 'deleted'"
+            "SELECT * FROM workflows WHERE status != 'archived'"
         ).fetchall()
         result = []
         for row in rows:
@@ -425,9 +503,9 @@ class FeatureDB:
         return self.get_workflow(id)
 
     def has_protected_workflow_children(self, id: str) -> bool:
-        """Check if workflow has children with status in-progress or done."""
+        """Check if workflow has children with status active."""
         row = self.conn.execute(
-            "SELECT COUNT(*) FROM workflows WHERE parent_id = ? AND status IN ('in-progress', 'done')",
+            "SELECT COUNT(*) FROM workflows WHERE parent_id = ? AND status = 'active'",
             (id,)
         ).fetchone()
         return row[0] > 0
@@ -439,13 +517,13 @@ class FeatureDB:
         self.conn.commit()
 
     def delete_workflow(self, id: str) -> dict:
-        """Delete workflow. Hard if planned, soft if in-progress/done."""
+        """Delete workflow. Hard if planned, soft (archived) if active."""
         workflow = self.get_workflow(id)
         if not workflow:
             return {"ok": False, "error": "workflow not found"}
 
         if self.has_protected_workflow_children(id):
-            return {"ok": False, "error": "has children with status in-progress or done"}
+            return {"ok": False, "error": "has children with status active"}
 
         status = workflow.get("status", "planned")
 
@@ -453,5 +531,12 @@ class FeatureDB:
             self.hard_delete_workflow(id)
             return {"ok": True, "type": "hard"}
         else:
-            self.update_workflow(id, status="deleted")
+            # Soft delete: set status to archived
+            now = datetime.now(UTC).isoformat()
+            self.conn.execute(
+                "UPDATE workflows SET status = 'archived', updated_at = ? WHERE id = ?",
+                (now, id)
+            )
+            self._sync_workflow_fts(id)
+            self.conn.commit()
             return {"ok": True, "type": "soft"}

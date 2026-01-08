@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from feature_tree.db import FeatureDB
 from feature_tree.markdown import generate_features_markdown, generate_workflows_markdown
+from feature_tree import embeddings
 
 
 SERVER_INSTRUCTIONS = """
@@ -81,7 +82,10 @@ Before modifying existing code:
 
 ## FEATURE LIFECYCLE
 
-Follow this exact sequence:
+Status: `planned` → `active` → `archived`
+Activity: `none` | `building` | `refactoring` | `fixing` | `extending`
+
+Follow this sequence:
 
 1. **CREATE** (before implementing)
    ```
@@ -90,14 +94,14 @@ Follow this exact sequence:
 
 2. **START** (when beginning work)
    ```
-   update_feature(id="AUTH.login", status="in-progress")
+   update_feature(id="AUTH.login", status="active", being_modified="building")
    ```
 
 3. **TRACK** (during implementation)
    ```
    update_feature(id="AUTH.login",
                   files=["src/auth/login.ts"],
-                  code_symbols=["handleLogin", "LoginRequest"])
+                  code_symbols=[{"name": "handleLogin", "location": "src/auth/login.ts", "valid": true}])
    ```
 
 4. **COMMIT** (after tests pass)
@@ -107,7 +111,12 @@ Follow this exact sequence:
 
 5. **COMPLETE**
    ```
-   update_feature(id="AUTH.login", status="done")
+   update_feature(id="AUTH.login", being_modified="none")
+   ```
+
+6. **LEAVE A NOTE** (if important context for next session)
+   ```
+   update_feature(id="AUTH.login", important_message="Rate limiter causes 500s if delay < 100ms")
    ```
 
 **NEVER:**
@@ -207,11 +216,20 @@ add_feature(id="AUTH.login", uses=["INFRA.rate_limiter", "INFRA.database"])
 ## DELETE BEHAVIOR
 
 - Status = "planned" → **hard delete** (gone forever)
-- Status = "in-progress" or "done" → **soft delete** (recoverable)
+- Status = "active" → **soft delete** → status becomes "archived" (recoverable)
 
 ## STATUS LIFECYCLE
 
-planned → in-progress → done (or deleted)
+planned → active → archived
+
+## ACTIVITY TRACKING
+
+`being_modified` tracks WHAT you're doing:
+- `none` — idle, not actively working
+- `building` — first-time implementation (new feature)
+- `refactoring` — changing implementation approach
+- `fixing` — addressing a bug
+- `extending` — adding capabilities to existing feature
 """
 
 def get_project_root(session_id: int | None = None) -> Path:
@@ -297,24 +315,44 @@ def resync_fts(s: int | None = None) -> str:
 
 @mcp.tool()
 def search_features(query: str, s: int | None = None) -> str:
-    """Fuzzy search features by name, description, or technical notes. Use before starting work to understand what exists.
+    """Hybrid search: semantic (conceptual) + FTS (keyword). Use before starting work.
 
-    Searches: id, name, description, technical_notes, files, code_symbols, commit_ids.
+    Semantic search finds conceptually related features (e.g., "auth" finds "login", "signin").
+    FTS search finds exact keyword matches.
     Returns: id, name, status, uses_count, confidence."""
     db = get_db(s)
     try:
-        results = db.search_features(query)
-        # Trim to essential fields only
+        db_path = get_feat_tree_dir(s)
+
+        # Semantic search first (top 10)
+        semantic_ids = embeddings.search_features_semantic(query, db_path, n_results=10)
+
+        # FTS search (top 10)
+        fts_results = db.search_features(query)
+        fts_ids = [r["id"] for r in fts_results[:10]]
+
+        # Merge: semantic first, then FTS additions (deduplicated)
+        seen = set()
+        merged_ids = []
+        for fid in semantic_ids + fts_ids:
+            if fid not in seen:
+                seen.add(fid)
+                merged_ids.append(fid)
+
+        # Load features and trim to essential fields
         trimmed = []
-        for r in results:
-            item = {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
-            if r.get("uses"):
-                uses_list = json.loads(r["uses"])
-                if uses_list:
-                    item["uses_count"] = len(uses_list)
-            if r.get("confidence"):
-                item["confidence"] = r["confidence"]
-            trimmed.append(item)
+        for fid in merged_ids[:10]:
+            r = db.get_feature(fid)
+            if r:
+                item = {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
+                if r.get("uses"):
+                    uses_list = json.loads(r["uses"])
+                    if uses_list:
+                        item["uses_count"] = len(uses_list)
+                if r.get("confidence"):
+                    item["confidence"] = r["confidence"]
+                trimmed.append(item)
+
         return json.dumps(trimmed)
     finally:
         db.close()
@@ -326,11 +364,21 @@ def add_feature(
     name: str,
     parent_id: str | None = None,
     description: str | None = None,
+    technical_notes: str | None = None,
+    status: str = "planned",
+    being_modified: str = "none",
+    important_message: str | None = None,
+    files: list[str] | None = None,
+    code_symbols: list[dict] | None = None,
     uses: list[str] | None = None,
     confidence: str | None = None,
     s: int | None = None
 ) -> str:
-    """Create a new feature. Use when human describes something new."""
+    """Create a new feature. Use when human describes something new.
+
+    status: planned | active | archived
+    being_modified: none | building | refactoring | fixing | extending
+    code_symbols: [{name, location, valid}] - location is file path (no line numbers)"""
     db = get_db(s)
     try:
         # Validate uses references
@@ -340,8 +388,16 @@ def add_feature(
                 if not db.get_feature(ref_id):
                     warnings.append(f"uses references non-existent feature '{ref_id}'")
 
-        db.add_feature(id=id, name=name, parent_id=parent_id, description=description, uses=uses, confidence=confidence)
+        feature = db.add_feature(
+            id=id, name=name, parent_id=parent_id, description=description,
+            technical_notes=technical_notes, status=status, being_modified=being_modified,
+            important_message=important_message, files=files, code_symbols=code_symbols,
+            uses=uses, confidence=confidence
+        )
         regenerate_markdown(s)
+
+        # Embed for semantic search (async, non-blocking)
+        embeddings.embed_feature(feature, get_feat_tree_dir(s))
 
         result = {"ok": True}
         if warnings:
@@ -354,39 +410,59 @@ def add_feature(
 @mcp.tool()
 def update_feature(
     id: str,
-    status: str | None = None,
-    code_symbols: list[str] | None = None,
-    files: list[str] | None = None,
-    commit_ids: list[str] | None = None,
-    technical_notes: str | None = None,
+    name: str | None = None,
     description: str | None = None,
+    technical_notes: str | None = None,
+    status: str | None = None,
+    being_modified: str | None = None,
+    important_message: str | None = None,
+    files: list[str] | None = None,
+    code_symbols: list[dict] | None = None,
     uses: list[str] | None = None,
     confidence: str | None = None,
+    commit_ids: list[str] | None = None,
     s: int | None = None
 ) -> str:
-    """Update a feature. ALWAYS record code_symbols + files after implementing. 1x effort now = 10x saved later."""
+    """Update a feature. ALWAYS record code_symbols + files after implementing.
+
+    status: planned | active | archived
+    being_modified: none | building | refactoring | fixing | extending
+    code_symbols: [{name, location, valid}] - location is file path (no line numbers)
+    important_message: Claude-to-Claude sticky note (persists across sessions)"""
     db = get_db(s)
     try:
         fields = {}
-        if status is not None:
-            fields["status"] = status
-        if code_symbols is not None:
-            fields["code_symbols"] = code_symbols
-        if files is not None:
-            fields["files"] = files
-        if commit_ids is not None:
-            fields["commit_ids"] = commit_ids
-        if technical_notes is not None:
-            fields["technical_notes"] = technical_notes
+        if name is not None:
+            fields["name"] = name
         if description is not None:
             fields["description"] = description
+        if technical_notes is not None:
+            fields["technical_notes"] = technical_notes
+        if status is not None:
+            fields["status"] = status
+        if being_modified is not None:
+            fields["being_modified"] = being_modified
+        if important_message is not None:
+            fields["important_message"] = important_message
+        if files is not None:
+            fields["files"] = files
+        if code_symbols is not None:
+            fields["code_symbols"] = code_symbols
         if uses is not None:
             fields["uses"] = uses
         if confidence is not None:
             fields["confidence"] = confidence
+        if commit_ids is not None:
+            fields["commit_ids"] = commit_ids
 
-        db.update_feature(id, **fields)
+        updated = db.update_feature(id, **fields)
         regenerate_markdown(s)
+
+        # Re-embed if any searchable text changed
+        text_fields = {"name", "description", "technical_notes", "files", "code_symbols"}
+        if updated and fields.keys() & text_fields:
+            embeddings.embed_feature(updated, get_feat_tree_dir(s))
+
         return '{"ok":true}'
     finally:
         db.close()
@@ -394,52 +470,85 @@ def update_feature(
 
 @mcp.tool()
 def get_feature(id: str, s: int | None = None) -> str:
-    """Get full details of a feature. Use BEFORE modifying to see impact.
+    """Get compact feature summary. Use BEFORE modifying to see impact.
 
-    Returns: All fields + uses_features, used_by_features, linked_workflows.
-    Check used_by_features before changing INFRA.* - many things may depend on it."""
+    Returns ~10 lines: status, being_modified, important_message, files, symbols, dependencies.
+    Check used_by before changing INFRA.* - many things may depend on it."""
     db = get_db(s)
     try:
-        feature = db.get_feature(id)
-        if feature:
-            # Add linked workflows
-            workflows = db.get_workflows_for_feature(id)
-            feature["linked_workflows"] = [
-                {"id": w["id"], "name": w["name"]}
-                for w in workflows
-            ]
+        f = db.get_feature(id)
+        if not f:
+            return '{"ok":false,"error":"not found"}'
 
-            # Add features this feature uses (forward lookup)
-            if feature.get("uses"):
-                uses_ids = json.loads(feature["uses"])
-                feature["uses_features"] = [
-                    {"id": f["id"], "name": f["name"]}
-                    for uid in uses_ids
-                    if (f := db.get_feature(uid))
-                ]
+        # Get relationships
+        used_by = db.get_features_using(id)
+        workflows = db.get_workflows_for_feature(id)
+        uses_ids = json.loads(f.get("uses") or "[]")
 
-            # Add features that use this feature (reverse lookup)
-            used_by = db.get_features_using(id)
-            if used_by:
-                feature["used_by_features"] = [
-                    {"id": f["id"], "name": f["name"]}
-                    for f in used_by
-                ]
+        # Build compact output
+        lines = [f"{f['id']} [{f.get('status', 'planned')}] [{f.get('being_modified', 'none')}]"]
 
-            return json.dumps(feature, default=str)
-        return '{"ok":false,"error":"not found"}'
+        if f.get("important_message"):
+            lines.append(f"⚠️ {f['important_message']}")
+
+        lines.append("")
+
+        # Files (first 5)
+        files = json.loads(f.get("files") or "[]")
+        files_str = ", ".join(files[:5]) if files else "none"
+        if len(files) > 5:
+            files_str += f" (+{len(files) - 5} more)"
+        lines.append(f"Files: {files_str}")
+
+        # Symbols (first 5) - names only, use search to find actual locations
+        symbols = json.loads(f.get("code_symbols") or "[]")
+        if symbols:
+            symbol_strs = []
+            for sym in symbols[:5]:
+                if isinstance(sym, dict):
+                    symbol_strs.append(sym.get("name", "?"))
+                else:
+                    symbol_strs.append(str(sym))
+            symbols_str = ", ".join(symbol_strs)
+            if len(symbols) > 5:
+                symbols_str += f" (+{len(symbols) - 5} more)"
+            lines.append(f"Symbols: {symbols_str}")
+        else:
+            lines.append("Symbols: none")
+
+        lines.append("")
+
+        # Dependencies
+        uses_str = ", ".join(uses_ids[:5]) if uses_ids else "none"
+        lines.append(f"Uses: {uses_str}")
+        used_by_ids = [ub["id"] for ub in used_by]
+        lines.append(f"Used by ({len(used_by_ids)}): {', '.join(used_by_ids[:5])}")
+        workflow_ids = [w["id"] for w in workflows]
+        lines.append(f"Workflows ({len(workflow_ids)}): {', '.join(workflow_ids[:5])}")
+
+        lines.append("")
+
+        # Summaries
+        if f.get("description"):
+            lines.append(f"Desc: {f['description'][:100]}")
+        if f.get("technical_notes"):
+            lines.append(f"Tech: {f['technical_notes'][:100]}")
+
+        return "\n".join(lines)
     finally:
         db.close()
 
 
 @mcp.tool()
 def delete_feature(id: str, s: int | None = None) -> str:
-    """Delete a feature. Hard-deletes if planned, soft-deletes if in-progress/done."""
+    """Delete a feature. Hard-deletes if planned, soft-deletes (archived) if active."""
     db = get_db(s)
     try:
         result = db.delete_feature(id)
         if result.get("ok"):
             regenerate_markdown(s)
+            # Remove from embeddings index
+            embeddings.delete_feature_embedding(id, get_feat_tree_dir(s))
         return json.dumps(result)
     finally:
         db.close()
@@ -449,19 +558,37 @@ def delete_feature(id: str, s: int | None = None) -> str:
 
 @mcp.tool()
 def search_workflows(query: str, s: int | None = None) -> str:
-    """Fuzzy search workflows. Use to find user journeys that would break if you change a feature.
+    """Hybrid search workflows: semantic + FTS. Find user journeys affected by changes.
 
-    Searches: id, name, description, purpose, depends_on (feature IDs).
     Example: search_workflows("AUTH.login") finds workflows using that feature."""
     db = get_db(s)
     try:
-        results = db.search_workflows(query)
+        db_path = get_feat_tree_dir(s)
+
+        # Semantic search first
+        semantic_ids = embeddings.search_workflows_semantic(query, db_path, n_results=10)
+
+        # FTS search
+        fts_results = db.search_workflows(query)
+        fts_ids = [r["id"] for r in fts_results[:10]]
+
+        # Merge deduplicated
+        seen = set()
+        merged_ids = []
+        for wid in semantic_ids + fts_ids:
+            if wid not in seen:
+                seen.add(wid)
+                merged_ids.append(wid)
+
         trimmed = []
-        for r in results:
-            item = {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
-            if r.get("confidence"):
-                item["confidence"] = r["confidence"]
-            trimmed.append(item)
+        for wid in merged_ids[:10]:
+            r = db.get_workflow(wid)
+            if r:
+                item = {"id": r["id"], "name": r["name"], "status": r["status"], "parent_id": r.get("parent_id")}
+                if r.get("confidence"):
+                    item["confidence"] = r["confidence"]
+                trimmed.append(item)
+
         return json.dumps(trimmed)
     finally:
         db.close()
@@ -496,6 +623,11 @@ def add_workflow(
             confidence=confidence
         )
         regenerate_markdown(s)
+
+        # Embed for semantic search
+        workflow = db.get_workflow(id)
+        if workflow:
+            embeddings.embed_workflow(workflow, get_feat_tree_dir(s))
 
         result = {"ok": True}
         if warnings:
@@ -554,8 +686,14 @@ def update_workflow(
         if confidence is not None:
             fields["confidence"] = confidence
 
-        db.update_workflow(id, **fields)
+        updated = db.update_workflow(id, **fields)
         regenerate_markdown(s)
+
+        # Re-embed if searchable text changed
+        text_fields = {"name", "description", "purpose", "depends_on"}
+        if updated and fields.keys() & text_fields:
+            embeddings.embed_workflow(updated, get_feat_tree_dir(s))
+
         return '{"ok":true}'
     finally:
         db.close()
@@ -563,12 +701,13 @@ def update_workflow(
 
 @mcp.tool()
 def delete_workflow(id: str, s: int | None = None) -> str:
-    """Delete a workflow. Hard if planned, soft if in-progress/done."""
+    """Delete a workflow. Hard if planned, soft (archived) if active."""
     db = get_db(s)
     try:
         result = db.delete_workflow(id)
         if result.get("ok"):
             regenerate_markdown(s)
+            embeddings.delete_workflow_embedding(id, get_feat_tree_dir(s))
         return json.dumps(result)
     finally:
         db.close()

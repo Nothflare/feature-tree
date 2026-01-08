@@ -98,10 +98,10 @@ Next session should read:
 [Goal and current state]
 
 ## Features Created/Modified (QUERY THESE)
-| ID | Name | Status | Action |
-|----|------|--------|--------|
-| AUTH.login | User Login | in-progress | created |
-| AUTH.session | Session Mgmt | planned | created |
+| ID | Name | Status | being_modified | Action |
+|----|------|--------|----------------|--------|
+| AUTH.login | User Login | active | building | created |
+| AUTH.session | Session Mgmt | planned | none | created |
 
 **Next session MUST run `get_feature(id)` for each row above.**
 The table is a summary — the FT entry is the source of truth.
@@ -247,6 +247,37 @@ Features in Feature Tree:
 - [list any created/modified features]
 ```
 
+## Restore State (v3)
+
+**If any feature has `being_modified != none`, add this section to handoff.md:**
+
+```markdown
+## Restore State
+```json
+{"feature": "AUTH.login", "being_modified": "refactoring"}
+```
+```
+
+This enables the SessionStart hook to automatically warn the next Claude:
+
+```
+⚠️ ACTIVE WORK FROM LAST SESSION:
+Feature: AUTH.login is being_modified=refactoring
+Continue or run update_feature("AUTH.login", being_modified="none") to close.
+```
+
+**How to check:** Before creating handoff, search for features with active work:
+```
+search_features("building OR refactoring OR fixing OR extending")
+```
+
+Or check the specific feature you were working on:
+```
+get_feature("FEATURE.id")  # Check being_modified field
+```
+
+---
+
 ## Context Efficiency
 
 - Handoff length matches complexity
@@ -255,3 +286,4 @@ Features in Feature Tree:
 - Decisions need reasoning so they're not re-questioned
 - **Always list features created** — prevents duplicate creation
 - **Always list memories to read** — ensures seamless continuation
+- **Always check being_modified** — add Restore State if not "none"

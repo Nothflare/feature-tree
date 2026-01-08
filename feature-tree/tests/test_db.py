@@ -56,15 +56,35 @@ def test_update_feature():
         db.close()
 
 
-def test_delete_feature():
+def test_delete_feature_hard():
+    """Planned features are hard-deleted."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "features.db")
         db = FeatureDB(db_path)
 
         db.add_feature(id="temp", name="Temporary")
-        deleted = db.delete_feature("temp")
+        result = db.delete_feature("temp")
 
-        assert deleted["status"] == "deleted"
+        assert result["ok"] is True
+        assert result["type"] == "hard"
+        assert db.get_feature("temp") is None
+        db.close()
+
+
+def test_delete_feature_soft():
+    """Active features are soft-deleted (archived)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "features.db")
+        db = FeatureDB(db_path)
+
+        db.add_feature(id="temp", name="Temporary")
+        db.update_feature("temp", status="active")
+        result = db.delete_feature("temp")
+
+        assert result["ok"] is True
+        assert result["type"] == "soft"
+        feature = db.get_feature("temp")
+        assert feature["status"] == "archived"
         db.close()
 
 

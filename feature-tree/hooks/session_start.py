@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
-"""Create session mapping and inject CONTEXT.md."""
+"""Create session mapping, inject CONTEXT.md, and parse Restore State from handoff."""
 import json
+import re
 import sys
 from pathlib import Path
+
+
+def parse_restore_state(handoff_content: str) -> dict | None:
+    """Extract Restore State JSON from handoff.md."""
+    match = re.search(r'## Restore State\s*```json\s*({.*?})\s*```', handoff_content, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    return None
+
 
 def main():
     try:
@@ -49,6 +62,21 @@ def main():
     else:
         context_parts.append("[No CONTEXT.md found] Run ft-mem:onboarding to create .feat-tree/CONTEXT.md")
 
+    # Check for Restore State in handoff.md
+    handoff_file = Path(cwd) / ".feat-tree" / "memories" / "handoff.md"
+    if handoff_file.exists():
+        try:
+            handoff_content = handoff_file.read_text(encoding="utf-8")
+            restore_state = parse_restore_state(handoff_content)
+            if restore_state:
+                feature_id = restore_state.get("feature", "unknown")
+                being_modified = restore_state.get("being_modified", "unknown")
+                context_parts.append(f"""⚠️ ACTIVE WORK FROM LAST SESSION:
+Feature: {feature_id} is being_modified={being_modified}
+Continue or run update_feature("{feature_id}", being_modified="none") to close.""")
+        except Exception:
+            pass
+
     output = {
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
@@ -56,6 +84,7 @@ def main():
         }
     }
     print(json.dumps(output))
+
 
 if __name__ == "__main__":
     main()

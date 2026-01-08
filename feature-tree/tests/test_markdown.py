@@ -2,7 +2,7 @@
 import os
 import tempfile
 from feature_tree.db import FeatureDB
-from feature_tree.markdown import generate_markdown
+from feature_tree.markdown import generate_features_markdown
 
 
 def test_generate_markdown():
@@ -11,13 +11,13 @@ def test_generate_markdown():
         db = FeatureDB(db_path)
 
         db.add_feature(id="auth", name="Authentication", description="Auth system")
-        db.add_feature(id="auth-login", name="Login", parent_id="auth", status="done")
+        db.add_feature(id="auth-login", name="Login", parent_id="auth", status="active")
 
-        md = generate_markdown(db)
+        md = generate_features_markdown(db)
 
-        assert "# Feature Tree" in md
+        assert "# Features" in md
         assert "## auth" in md
         assert "Authentication" in md
         assert "### auth-login" in md
-        assert "**Status:** done" in md
+        assert "**Status:** active" in md
         db.close()

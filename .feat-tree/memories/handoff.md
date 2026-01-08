@@ -1,124 +1,68 @@
 # Handoff
 
-## Session Summary
+## Completed
 
-Major improvements to Feature Tree skill system. Version now at **feature-tree v2.0.3, ft-mem v2.0.1**.
+**Feature Tree v3 Design** — Full specification written and ready for implementation.
 
-**After implementing the pending fixes, bump to v2.1.0.**
+## Artifacts Created
 
-## Completed This Session
+| File | Purpose |
+|------|---------|
+| `docs/plans/2026-01-08-feature-tree-v3-design.md` | Complete v3 specification |
+| `.feat-tree/memories/codebase_structure.md` | Updated with v3 planned changes |
 
-### Skills Created/Overhauled
-1. **brainstorm skill** - Complete rewrite
-   - Three phases: Discovery → Design → Specification
-   - Mind tools as checkpoints (must address each)
-   - Full tech stack discussion with rationale
-   - Design doc includes complete feature/workflow lists
-
-2. **executing-plans skill** - New
-   - Layer-based batching (Layer 0-4: Setup → Infra → Core → Support → Polish)
-   - CRITICAL RULE: Never mix layers in same batch
-   - Uses /feature-tree:commit after each batch
-
-3. **bootstrap skill** - Rewritten
-   - Two-phase: Feature Discovery → Workflow Identification
-   - Confidence levels on output
-   - bootstrap_log() for audit trail
-
-4. **ft-mem:brainstorm-sync** - New
-   - Post-brainstorm memory sync
-
-### Schema/MCP Changes
-- Added `confidence` field to features and workflows tables
-- DB auto-migrates existing databases
-- Updated SERVER_INSTRUCTIONS with tool usage guidance
-- Updated session-start hook philosophy
-
-## Changes Committed
-
-All changes from this session have been committed.
-
----
-
-## PENDING FIXES FOR NEXT SESSION
-
-### Priority 1: MCP Tool Bugs (confidence param missing)
-
-The DB layer supports `confidence` but MCP tools don't expose it!
-
-| Tool | Fix Needed |
-|------|------------|
-| `add_feature()` | Add `confidence: str \| None = None` param |
-| `update_feature()` | Add `confidence: str \| None = None` param |
-| `add_workflow()` | Add `confidence: str \| None = None` param |
-| `update_workflow()` | Add `confidence: str \| None = None` param |
-| `search_features()` | Show `confidence` in results |
-| `search_workflows()` | Show `confidence` in results |
-
-Files: `feature-tree/feature_tree/mcp_server.py`
-
-### Priority 2: FTS Index Gap (CRITICAL)
-
-**Problem:** `files` and `code_symbols` are NOT in FTS index!
-
-Cannot search "which feature owns this file" or "which feature has this function".
-
-**Fix options:**
-1. Add `files` and `code_symbols` to FTS5 index in `db.py`
-2. Or add `find_feature_by_file(path)` convenience tool
-
-Files: `feature-tree/feature_tree/db.py`
-
-### Priority 3: Validation Missing
-
-| Issue | Fix |
-|-------|-----|
-| `uses` field accepts non-existent feature IDs | Add warning (not error) if referenced feature doesn't exist |
-| `depends_on` field same issue | Same fix |
-
-### Priority 4: Complete Handoff Templates
-
-The handoff.md templates for DEBUGGING and BLOCKED need the "Continue Protocol" section added (only DONE and IN-PROGRESS have it).
-
-File: `ft-mem/commands/handoff.md`
-
----
-
-## Continue Protocol for Next Session
-
-**Before any implementation, trace the data flow:**
-
-1. Read this handoff completely
-2. Read `docs/plans/2026-01-05-mcp-improvements-spec.md` for implementation details
-3. For MCP fixes: read `mcp_server.py` and `db.py` to understand current state
-4. Check `linked_workflows` when modifying features to understand impact
-5. Trace: where does data come from → how it transforms → where it goes
-
-**DO NOT speculate about data structures. Trace the actual flow.**
-
-## Key Design Decisions (Don't Revisit)
+## Key v3 Decisions (Don't Revisit)
 
 | Decision | Rationale |
 |----------|-----------|
-| Mind tools as checkpoints, not scripts | Give Claude flexibility, explain WHY not HOW |
-| Layer-based batching | Prevents mixing setup with features |
-| /feature-tree:commit after each batch | Ensures FT stays in sync |
-| INFRA.* naming convention | No separate infra table, just features with prefix |
-| Soft delete for in-progress/done | Allows recovery, only planned = hard delete |
+| `status`: planned/active/archived | Clean lifecycle (was: planned/in_progress/done/deleted) |
+| `being_modified`: none/building/refactoring/fixing/extending | Activity is orthogonal to lifecycle |
+| Hooks = JIT reminders, not automation | Cybernetics: complex system (Claude) shouldn't be controlled by simple system (hooks) |
+| `get_feature()` returns compact 10-line format | Dense > verbose for daily use |
+| Structured `code_symbols`: `{name, location, valid}` | Location + validity for better JIT reminders |
+| `important_message` field | Claude-to-Claude sticky notes |
+| Previous Claude decides which memories to inject | Via handoff, not automatic hook logic |
+| Semantic search via embeddings | ChromaDB + sentence-transformers, hybrid with FTS fallback |
 
-## Files Changed This Session
+## Implementation Roadmap
 
-- `feature-tree/skills/brainstorm/SKILL.md` - Complete rewrite
-- `feature-tree/skills/executing-plans/SKILL.md` - New
-- `feature-tree/skills/bootstrap/SKILL.md` - Rewrite
-- `feature-tree/feature_tree/db.py` - confidence field
-- `feature-tree/feature_tree/mcp_server.py` - SERVER_INSTRUCTIONS
-- `ft-mem/skills/brainstorm-sync/SKILL.md` - New
-- `ft-mem/commands/handoff.md` - Continue Protocol
-- `ft-mem/hooks/session-start.py` - Philosophy update
+### Layer 1 - Schema & Migration
+- [ ] Add `being_modified`, `important_message`, `archived_at` columns to db.py
+- [ ] Write v2→v3 migration logic
+- [ ] Update `code_symbols` to structured format
 
-## Read These Files
+### Layer 2 - MCP Tools & Embeddings
+- [ ] Update `add_feature()` with new params + embed on create
+- [ ] Update `update_feature()` with new params + re-embed on change
+- [ ] Rewrite `get_feature()` for compact output
+- [ ] Add ChromaDB + sentence-transformers for semantic search
+- [ ] Implement hybrid search (semantic + FTS fallback)
 
-- `.feat-tree/memories/codebase_structure.md` - Updated with new skills
-- `.feat-tree/CONTEXT.md` - Project context and assumptions
-- `docs/plans/2026-01-05-mcp-improvements-spec.md` - **Detailed implementation spec for pending fixes**
+### Layer 3 - Hooks
+- [ ] Create `jit-reminder.py` hook
+- [ ] Add PreToolUse matcher to `hooks.json`
+- [ ] Update SessionStart to parse Restore State
+
+### Layer 4 - Skills
+- [ ] Create `/feature-tree:understand` skill
+- [ ] Update `/ft-mem:handoff` with Restore State section
+
+### Layer 5 - Testing
+- [ ] Test migration on existing v2 databases
+- [ ] Test semantic search quality (embeddings)
+- [ ] Test JIT reminders on Read/Edit
+- [ ] Test handoff restore state flow
+
+## Read These Memories
+
+Next session should read:
+- `docs/plans/2026-01-08-feature-tree-v3-design.md` — Full implementation spec
+- `.feat-tree/memories/codebase_structure.md` — Current vs v3 structure
+
+## Notes for Future
+
+- Design emerged from brainstorming session comparing Feature Tree with:
+  - Official `feature-dev` plugin (parallel agents, code review)
+  - Advent of Claude 31 days guide (Claude Code native features)
+- Key insight: **Hooks should remind, not control** (cybernetics principle)
+- v4 will add visualization (human-product-agent interface)
