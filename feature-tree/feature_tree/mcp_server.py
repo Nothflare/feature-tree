@@ -175,9 +175,10 @@ def resync_fts(s: int | None = None) -> str:
 
 @mcp.tool()
 def search_features(query: str, s: int | None = None) -> str:
-    """Semantic search for features. Use BEFORE implementing to find existing features and prevent duplicates.
+    """Find features by concept, not just keyword. "auth" finds login, session, credentials.
 
-    Returns: id, name, status, parent_id, uses_count, confidence."""
+    When: BEFORE implementing anything. Prevents duplicates, finds existing solutions.
+    Returns: id, name, status, parent_id, uses_count."""
     db = get_db(s)
     try:
         db_path = get_feat_tree_dir(s)
@@ -236,11 +237,11 @@ def add_feature(
     confidence: str | None = None,
     s: int | None = None
 ) -> str:
-    """Create a new feature. Use when human describes something new.
+    """Create a new feature. Record what you're building.
 
-    status: planned | active | archived
-    being_modified: none | building | refactoring | fixing | extending
-    code_symbols: [{name, location, valid}] - location is file path (no line numbers)"""
+    When: AFTER implementing (when you know the actual files/symbols).
+    Fields: description (YC partner), technical_notes (developer), files, code_symbols, uses.
+    code_symbols format: [{name, location, valid}]"""
     db = get_db(s)
     try:
         # Validate uses references
@@ -285,12 +286,11 @@ def update_feature(
     commit_ids: list[str] | None = None,
     s: int | None = None
 ) -> str:
-    """Update a feature. ALWAYS record code_symbols + files after implementing.
+    """Update a feature with new info. Updates OVERRIDE, not append.
 
-    status: planned | active | archived
-    being_modified: none | building | refactoring | fixing | extending
-    code_symbols: [{name, location, valid}] - location is file path (no line numbers)
-    important_message: Claude-to-Claude sticky note (persists across sessions)"""
+    When: AFTER implementing to record files/symbols. For handoff, set being_modified.
+    To add to a list: get_feature first, then update with full list.
+    important_message: sticky note for next Claude session."""
     db = get_db(s)
     try:
         fields = {}
@@ -332,9 +332,10 @@ def update_feature(
 
 @mcp.tool()
 def get_feature(id: str, s: int | None = None) -> str:
-    """Get full feature context. Use AFTER search to see files, symbols, dependencies, and what depends on this.
+    """Full context for a feature: files, symbols, what it uses, what uses IT, linked workflows.
 
-    Returns: status, files, symbols, uses, used_by, linked_workflows, important_message."""
+    When: AFTER search to zoom in. BEFORE modifying to see impact.
+    Returns: status, files, symbols, uses, used_by, linked_workflows."""
     db = get_db(s)
     try:
         f = db.get_feature(id)
@@ -402,7 +403,9 @@ def get_feature(id: str, s: int | None = None) -> str:
 
 @mcp.tool()
 def delete_feature(id: str, s: int | None = None) -> str:
-    """Delete a feature. Hard-deletes if planned, soft-deletes (archived) if active."""
+    """Remove a feature. Planned → hard delete. Active → archived (recoverable).
+
+    When: AFTER deleting the code. Check what depends on it first."""
     db = get_db(s)
     try:
         result = db.delete_feature(id)
@@ -419,9 +422,10 @@ def delete_feature(id: str, s: int | None = None) -> str:
 
 @mcp.tool()
 def search_workflows(query: str, s: int | None = None) -> str:
-    """Semantic search for workflows. Start here for broad context — one workflow often has all context needed for a task.
+    """Find user journeys. One workflow often has all context needed for a task.
 
-    Returns: id, name, status, parent_id, depends_on_count."""
+    When: START HERE for broad context. Workflows → Features → Code.
+    Returns: id, name, status, depends_on_count."""
     db = get_db(s)
     try:
         db_path = get_feat_tree_dir(s)
@@ -471,7 +475,10 @@ def add_workflow(
     confidence: str | None = None,
     s: int | None = None
 ) -> str:
-    """Create a workflow. Use ID hierarchy: JOURNEY.flow (like features). depends_on links to feature IDs."""
+    """Create a user journey. Workflows compose features into experiences.
+
+    When: During brainstorming to document user flows.
+    Fields: description (YC partner), purpose (technical), steps (walkthrough), depends_on (feature IDs)."""
     db = get_db(s)
     try:
         # Validate depends_on references
@@ -504,9 +511,10 @@ def add_workflow(
 
 @mcp.tool()
 def get_workflow(id: str, s: int | None = None) -> str:
-    """Get full workflow context. Atomic documentation for a user journey.
+    """Atomic documentation for a user journey. Steps, purpose, which features are ready vs blocked.
 
-    Returns: description, purpose, steps, depends_on features with their status (ready/blocked)."""
+    When: AFTER search to get full journey context.
+    Returns: description, purpose, steps, linked_features with status."""
     db = get_db(s)
     try:
         workflow = db.get_workflow(id)
@@ -534,7 +542,10 @@ def update_workflow(
     confidence: str | None = None,
     s: int | None = None
 ) -> str:
-    """Update a workflow's fields."""
+    """Update a workflow. Updates OVERRIDE, not append.
+
+    When: Refining flows, updating dependencies.
+    To add to depends_on: get_workflow first, then update with full list."""
     db = get_db(s)
     try:
         fields = {}
@@ -566,7 +577,9 @@ def update_workflow(
 
 @mcp.tool()
 def delete_workflow(id: str, s: int | None = None) -> str:
-    """Delete a workflow. Hard if planned, soft (archived) if active."""
+    """Remove a workflow. Planned → hard delete. Active → archived (recoverable).
+
+    When: Flow no longer exists or is deprecated."""
     db = get_db(s)
     try:
         result = db.delete_workflow(id)
