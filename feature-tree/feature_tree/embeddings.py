@@ -144,15 +144,19 @@ def embed_feature(feature: dict, db_path: Path) -> bool:
 
     Returns True if successful, False if embeddings not available.
     """
-    client = get_chroma_client(db_path)
-    if client is None:
+    # Check API key FIRST - skip ChromaDB entirely if no key
+    config = get_embedding_config()
+    if not config.get("api_key"):
         return False
 
     text = feature_to_text(feature)
-    embedding = get_embedding(text)
-
+    embedding = get_embedding(text, config)
     if embedding is None:
-        # No API key or request failed - store without embedding for FTS fallback
+        return False
+
+    # Only NOW touch ChromaDB
+    client = get_chroma_client(db_path)
+    if client is None:
         return False
 
     collection = client.get_or_create_collection("features")
@@ -172,14 +176,19 @@ def embed_feature(feature: dict, db_path: Path) -> bool:
 
 def embed_workflow(workflow: dict, db_path: Path) -> bool:
     """Add or update workflow embedding in ChromaDB."""
-    client = get_chroma_client(db_path)
-    if client is None:
+    # Check API key FIRST - skip ChromaDB entirely if no key
+    config = get_embedding_config()
+    if not config.get("api_key"):
         return False
 
     text = workflow_to_text(workflow)
-    embedding = get_embedding(text)
-
+    embedding = get_embedding(text, config)
     if embedding is None:
+        return False
+
+    # Only NOW touch ChromaDB
+    client = get_chroma_client(db_path)
+    if client is None:
         return False
 
     collection = client.get_or_create_collection("workflows")
@@ -201,12 +210,18 @@ def search_features_semantic(query: str, db_path: Path, n_results: int = 10) -> 
 
     Returns empty list if embeddings not available.
     """
-    client = get_chroma_client(db_path)
-    if client is None:
+    # Check API key FIRST - skip ChromaDB entirely if no key
+    config = get_embedding_config()
+    if not config.get("api_key"):
         return []
 
-    embedding = get_embedding(query)
+    embedding = get_embedding(query, config)
     if embedding is None:
+        return []
+
+    # Only NOW touch ChromaDB
+    client = get_chroma_client(db_path)
+    if client is None:
         return []
 
     try:
@@ -225,12 +240,18 @@ def search_features_semantic(query: str, db_path: Path, n_results: int = 10) -> 
 
 def search_workflows_semantic(query: str, db_path: Path, n_results: int = 10) -> list[str]:
     """Semantic search for workflows. Returns list of workflow IDs."""
-    client = get_chroma_client(db_path)
-    if client is None:
+    # Check API key FIRST - skip ChromaDB entirely if no key
+    config = get_embedding_config()
+    if not config.get("api_key"):
         return []
 
-    embedding = get_embedding(query)
+    embedding = get_embedding(query, config)
     if embedding is None:
+        return []
+
+    # Only NOW touch ChromaDB
+    client = get_chroma_client(db_path)
+    if client is None:
         return []
 
     try:
@@ -249,6 +270,11 @@ def search_workflows_semantic(query: str, db_path: Path, n_results: int = 10) ->
 
 def delete_feature_embedding(feature_id: str, db_path: Path) -> bool:
     """Remove feature from ChromaDB."""
+    # Check API key FIRST - skip ChromaDB entirely if no key
+    config = get_embedding_config()
+    if not config.get("api_key"):
+        return False
+
     client = get_chroma_client(db_path)
     if client is None:
         return False
@@ -263,6 +289,11 @@ def delete_feature_embedding(feature_id: str, db_path: Path) -> bool:
 
 def delete_workflow_embedding(workflow_id: str, db_path: Path) -> bool:
     """Remove workflow from ChromaDB."""
+    # Check API key FIRST - skip ChromaDB entirely if no key
+    config = get_embedding_config()
+    if not config.get("api_key"):
+        return False
+
     client = get_chroma_client(db_path)
     if client is None:
         return False
@@ -280,6 +311,11 @@ def migrate_embeddings(db_path: Path, features: list[dict], workflows: list[dict
 
     Returns {"features": N, "workflows": M} with counts of successfully embedded items.
     """
+    # Check API key FIRST - skip entirely if no key
+    config = get_embedding_config()
+    if not config.get("api_key"):
+        return {"features": 0, "workflows": 0}
+
     feature_count = 0
     workflow_count = 0
 
