@@ -13,7 +13,9 @@
       "command": "uv",
       "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "feature-tree"],
       "env": {
-        "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}"
+        "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}",
+        "FT_EMBEDDING_MODEL": "${FT_EMBEDDING_MODEL}",
+        "FT_EMBEDDING_ENDPOINT": "${FT_EMBEDDING_ENDPOINT}"
       }
     }
   }
