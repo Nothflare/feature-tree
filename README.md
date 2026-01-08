@@ -1,65 +1,83 @@
 # Feature Tree
 
-A semantic layer connecting human intent and AI implementation.
+The interface between human intent, AI agent, and code.
 
-## Why Use Feature Tree?
+## Philosophy
 
-### The Problem You Have
+### The Problem
 
-Without Feature Tree, every session you:
-- **Re-discover** which files implement which features
-- **Break things** because you don't know what depends on what
-- **Duplicate work** by recreating features that already exist
-- **Lose context** when sessions restart
+AI agents are high-variance systems. They can reason, explore, and make decisions. But without context, they:
+- Guess instead of knowing
+- Duplicate instead of reusing
+- Break things they didn't know existed
+- Lose everything when sessions restart
 
-### What Feature Tree Gives You
+Traditional solutions try to control agents with rigid rules. This doesn't work — you can't control a complex system with a simple one.
 
-| Before | After |
-|--------|-------|
-| "Which file handles login?" → grep, guess, hope | `search_features("login")` → AUTH.login → files: [src/auth/login.ts] |
-| "What breaks if I change this?" → no idea | `get_feature("INFRA.database")` → used_by: [AUTH.login, CART.checkout, ...] |
-| "Does this feature exist?" → search codebase | `search_features("password reset")` → shows if it exists with status |
-| "What's the user flow?" → reverse-engineer from code | `get_workflow("USER_ONBOARDING.signup")` → full journey with dependencies |
+### The Solution
 
-### Concrete Benefits
+Feature Tree is a **semantic layer** that grows with your project. Not rules that constrain, but context that enables.
 
-1. **Instant Context**: `search_features("auth")` returns all auth features with their files, symbols, and status in one call
-2. **Impact Analysis**: Before changing `INFRA.rate_limiter`, see exactly what depends on it
-3. **No Duplicates**: Search before creating - know what exists
-4. **Cross-Session Memory**: Features persist across sessions - no re-explaining
+**Workflows** capture human intent — user journeys explained like you'd explain to a YC partner.
 
-## Core Concepts
+**Features** capture code reality — atomic units with technical notes for implementation.
 
-### Two Trees
+**Semantic search** connects them — "auth" finds login, signin, credentials. Jump straight to context without guessing.
 
-| Tree | Purpose | Searchable Fields |
-|------|---------|-------------------|
-| **Features** | Code units (what to implement) | id, name, description, files, code_symbols, commit_ids |
-| **Workflows** | User journeys (how features compose) | id, name, description, purpose, depends_on |
+The agent starts at the right zoom level, with the right context in hand.
 
-The link between them is the power:
-- `get_feature("AUTH.login")` → shows `linked_workflows` (what user journeys use this)
-- `get_workflow("USER_ONBOARDING.signup")` → shows `linked_features` with status (what's done vs planned)
+## How It Works
 
-### Atomic Features
-
-Features are small, implementable units. NOT categories.
+### Workflow-First Approach
 
 ```
-BAD:  "User Authentication" (too broad)
-GOOD: AUTH.login, AUTH.register, AUTH.password_reset (atomic, implementable)
+Task arrives
+    ↓
+search_workflows("what user wants")  ← Start here (broad context)
+    ↓
+get_workflow(id) → steps, dependencies, purpose
+    ↓
+get_feature(id) → files, symbols, technical notes (focused context)
+    ↓
+Read actual code (only when needed)
 ```
 
-### Infrastructure (INFRA.*)
+One workflow often contains all context needed for a task. No need to grep the entire codebase.
 
-Shared utilities use the `INFRA.*` naming convention:
+### Two Trees, Connected
+
+| Tree | What It Captures | Audience |
+|------|------------------|----------|
+| **Workflows** | User journeys, steps, why it exists | Human (YC partner level) |
+| **Features** | Atomic code units, how it works | Developer (implementation level) |
+
+The link is the power:
+- `get_feature("AUTH.login")` → shows which workflows use it
+- `get_workflow("USER.login_flow")` → shows which features are done vs planned
+
+### Field Definitions
+
+**Workflows:**
+- `description` — Explain to a YC partner (what the journey IS)
+- `purpose` — Technical goal (why it exists in the system)
+- `steps` — Actual flow in plain language
+
+**Features:**
+- `description` — Explain to a YC partner (what it does, user-facing)
+- `technical_notes` — Explain to a developer (how it works, gotchas)
+
+Both self-contained. Enough detail that Claude can understand without asking questions.
+
+### Semantic Search
+
+Search finds related concepts, not just keywords.
 
 ```
-INFRA.rate_limiter     → shared infrastructure
-AUTH.login             → uses: [INFRA.rate_limiter]
+search_features("auth")     → finds: login, signin, credentials, session
+search_workflows("payment") → finds: checkout, subscription, refund
 ```
 
-Call `get_feature("INFRA.rate_limiter")` → see `used_by_features` (everything that depends on it).
+Jump straight to the right context. Prevents duplicates, prevents hallucination, prevents blind spots.
 
 ## Installation
 
@@ -70,15 +88,10 @@ Call `get_feature("INFRA.rate_limiter")` → see `used_by_features` (everything 
 # Restart Claude Code
 ```
 
-## Semantic Search (Optional)
+### Semantic Search Setup (Optional)
 
-v3.0 adds semantic search using embeddings. Without it, search falls back to FTS (keyword matching).
+Without API key, falls back to keyword search. Still works, just less semantic.
 
-### Setup
-
-Set the `FT_EMBEDDING_API_KEY` environment variable:
-
-**Option 1: Claude Code settings** (recommended)
 ```json
 // ~/.claude/settings.json
 {
@@ -88,167 +101,94 @@ Set the `FT_EMBEDDING_API_KEY` environment variable:
 }
 ```
 
-**Option 2: System environment**
-```bash
-export FT_EMBEDDING_API_KEY="sk-or-..."
-```
-
-### Configuration
-
 | Env Variable | Default | Description |
 |--------------|---------|-------------|
-| `FT_EMBEDDING_API_KEY` | (none) | OpenRouter API key. Without it, semantic search disabled. |
-| `FT_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model to use |
-| `FT_EMBEDDING_ENDPOINT` | `https://openrouter.ai/api/v1/embeddings` | API endpoint |
-
-### How It Works
-
-- **With API key**: Hybrid search (semantic + FTS). "auth" finds "login", "signin", "credentials".
-- **Without API key**: FTS only (keyword matching). Still works, just less semantic.
-
-## Session Support
-
-When multiple Claude sessions work on different projects simultaneously:
-
-```
-# Hook injects session ID into context:
-FT_SESSION=1
-
-# Pass to all tools:
-search_features("auth", s=1)
-add_feature(id="AUTH.login", name="Login", s=1)
-```
-
-This prevents cross-project data corruption.
+| `FT_EMBEDDING_API_KEY` | (none) | OpenRouter API key |
+| `FT_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Model |
+| `FT_EMBEDDING_ENDPOINT` | `https://openrouter.ai/api/v1/embeddings` | Endpoint |
 
 ## MCP Tools
 
-### Features
+### Search (use BEFORE implementing)
 
-| Tool | When to Use | Benefit |
-|------|-------------|---------|
-| `search_features(query)` | **BEFORE implementing anything** | Find existing features, avoid duplicates |
-| `get_feature(id)` | **BEFORE modifying code** | See dependencies, linked workflows, impact |
-| `add_feature(id, name, ...)` | When creating new functionality | Track from the start |
-| `update_feature(id, files, code_symbols, ...)` | **AFTER implementing** | Future sessions find code instantly |
-| `delete_feature(id)` | Removing functionality | Clean up (soft-delete if in-progress) |
+| Tool | Purpose |
+|------|---------|
+| `search_features(query)` | Find existing features, prevent duplicates |
+| `search_workflows(query)` | Find user journeys, understand broad context |
 
-**Search finds:** id, name, description, technical_notes, files, code_symbols, commit_ids
+### Get (use AFTER search for full context)
 
-### Workflows
+| Tool | Purpose |
+|------|---------|
+| `get_feature(id)` | Files, symbols, dependencies, what depends on this |
+| `get_workflow(id)` | Steps, purpose, which features are ready vs blocked |
 
-| Tool | When to Use | Benefit |
-|------|-------------|---------|
-| `search_workflows(query)` | Understanding user impact | Find journeys that touch an area |
-| `get_workflow(id)` | Before implementing a flow | See what features exist vs need building |
-| `add_workflow(id, name, depends_on, ...)` | Designing user journeys | Track the full experience |
-| `update_workflow(id, ...)` | Refining flows | Keep journeys accurate |
-| `delete_workflow(id)` | Removing flows | Clean up |
+### Create/Update (use AFTER implementing)
 
-**Search finds:** id, name, description, purpose, depends_on (feature IDs)
+| Tool | Purpose |
+|------|---------|
+| `add_feature(...)` | Create new feature |
+| `update_feature(...)` | Update files, symbols, notes after implementing |
+| `add_workflow(...)` | Create new workflow |
+| `update_workflow(...)` | Update steps, dependencies |
+| `delete_feature(id)` | Archive (active) or delete (planned) |
+| `delete_workflow(id)` | Archive (active) or delete (planned) |
 
-### Utility
+**Note:** Updates OVERRIDE, not append. To add a file, get current list first, then update with full list.
 
-| Tool | When to Use |
-|------|-------------|
-| `resync_fts()` | If search returns empty but features exist |
-| `debug_cwd()` | Debugging path/session issues |
+## Usage
+
+### Simple Rule
+
+- **Search BEFORE implementing** (always)
+- **Create/update AFTER implementing** (when you know actual files, symbols)
+
+### Status
+
+Status tells you what you CAN DO with something:
+
+| Status | Meaning | Action |
+|--------|---------|--------|
+| `planned` | Designed, not in code | Don't depend on it yet |
+| `active` | Implemented, working | Safe to use |
+| `archived` | Deprecated/removed | Update things depending on it |
+
+### being_modified (for handoff only)
+
+Only set when handing off mid-task:
+
+| Value | When |
+|-------|------|
+| `building` | First-time implementation, incomplete |
+| `refactoring` | Changing approach, incomplete |
+| `fixing` | Bug fix, incomplete |
+| `extending` | Adding features, incomplete |
 
 ## Skills
 
 | Skill | Purpose |
 |-------|---------|
-| `/feature-tree:bootstrap` | Analyze codebase → discover features → trace workflows |
-| `/feature-tree:brainstorm` | Design new features through structured discovery |
-| `/feature-tree:executing-plans` | Execute implementation plans with commits |
-| `/feature-tree:commit` | Commit with automatic feature tree update |
-| `/feature-tree:understand` | Build global codebase awareness via workflows and features |
-| `/ft-mem:onboarding` | First-time project setup |
-| `/ft-mem:handoff` | Save context before /clear (includes Restore State for v3) |
-
-## Usage Protocol
-
-### Before ANY Implementation
-
-```python
-# 1. Check if feature exists
-search_features("login")
-
-# 2. If modifying existing, check impact
-get_feature("AUTH.login")
-# → See used_by_features, linked_workflows
-
-# 3. Check related workflows
-search_workflows("login")
-```
-
-### During Implementation
-
-```python
-# Create feature BEFORE coding
-add_feature(id="AUTH.login", name="User Login", status="planned")
-
-# Start work (v3: status + being_modified)
-update_feature(id="AUTH.login", status="active", being_modified="building")
-
-# Track as you go
-update_feature(id="AUTH.login",
-    files=["src/auth/login.ts"],
-    code_symbols=[{"name": "handleLogin", "location": "src/auth/login.ts", "valid": True}])
-
-# Leave notes for future sessions
-update_feature(id="AUTH.login", important_message="Rate limiter needs 100ms delay")
-```
-
-### After Implementation
-
-```python
-# Use the commit skill (bundles git + FT update)
-/feature-tree:commit
-
-# Mark work complete
-update_feature(id="AUTH.login", being_modified="none", commit_ids=["abc123"])
-```
-
-## v3 State Model
-
-### Status (lifecycle)
-| Status | Meaning |
-|--------|---------|
-| `planned` | Designed, not built |
-| `active` | Implemented, in use |
-| `archived` | Removed (soft-delete) |
-
-### being_modified (activity)
-| Value | Meaning |
-|-------|---------|
-| `none` | Idle, no active work |
-| `building` | First-time implementation |
-| `refactoring` | Changing approach |
-| `fixing` | Addressing a bug |
-| `extending` | Adding capabilities |
-
-### JIT Reminders
-
-When you Read/Edit a file tracked in Feature Tree, you'll see context:
-
-```
-📍 AUTH.login [active] [refactoring]
-⚠️ Rate limiter needs 100ms delay
-Uses: INFRA.session, INFRA.rate_limiter
-Used by (3): AUTH.logout, AUTH.session, AUTH.password_reset
-```
+| `/feature-tree:brainstorm` | Design through Discovery → Product → Design → Specification |
+| `/feature-tree:executing-plans` | Execute plans with commits between tasks |
+| `/feature-tree:commit` | Commit with feature tree update |
+| `/feature-tree:bootstrap` | Discover features from existing codebase |
+| `/ft-mem:handoff` | Save context before /clear |
+| `/ft-mem:brainstorm-sync` | Sync brainstorm discoveries to memory |
 
 ## Storage
 
 ```
 .feat-tree/
 ├── features.db      # SQLite + FTS5
-├── chroma/          # ChromaDB vector store (semantic search)
+├── chroma/          # Vector store (semantic search)
 ├── FEATURES.md      # Auto-generated
 ├── WORKFLOWS.md     # Auto-generated
 ├── CONTEXT.md       # Product context
-└── memories/        # Session continuity
+└── memories/        # Cross-session context
+    ├── handoff.md
+    ├── user.md
+    ├── scope.md
+    └── decisions.md
 ```
 
 ## Requirements
