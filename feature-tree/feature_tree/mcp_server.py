@@ -16,220 +16,80 @@ from feature_tree import embeddings
 SERVER_INSTRUCTIONS = """
 # Feature Tree
 
-Two parallel trees that enable impact analysis and context continuity:
-- **Features** = atomic code units (what gets implemented)
-- **Workflows** = user-facing experiences (how features compose)
+Feature Tree connects human intent to code. Workflows are journeys (broad context). Features are atomic units (focused context). Start at the right zoom level for your task with the right context in hand.
 
-## SESSION
+Searchable, persist across sessions, and grow with the project.
 
-If you see `FT_SESSION=N` in context, pass `s=N` to all Feature Tree tools.
-This ensures data goes to the correct project when multiple sessions run concurrently.
+## Semantic Search
 
-## KEY MANTRAS
+Semantic search lets you jump straight to the right context without guessing or exploring. Prevents duplicates, prevents hallucination, prevents blind spots.
 
-1. **"Workflows are the source of truth for data flow"**
-2. **"Query the entries, don't just read the text"**
-3. **"Trace, don't speculate"**
-4. **"Check impact before changing"**
-5. **"Create entry before implementing"**
+## Features
 
----
-
-## BEFORE ANY IMPLEMENTATION (REQUIRED)
-
-These steps are MANDATORY. Do not skip them.
-
-1. **search_features("relevant terms")**
-   - Does this feature already exist?
-   - What related features exist?
-
-2. **search_workflows("relevant terms")**
-   - What user journeys touch this area?
-   - What would break if I change this?
-
-3. **If feature exists: get_feature(id)**
-   - What files/symbols are involved?
-   - What uses this? (used_by_features)
-   - What workflows depend on it? (linked_workflows)
-
-**If you skip these steps, you WILL:**
-- Recreate features that exist
-- Break workflows you didn't know about
-- Miss important context
-
----
-
-## IMPACT ANALYSIS (BEFORE ANY CHANGE)
-
-Before modifying existing code:
-
-1. **get_feature(id)** for the feature you're changing
-2. **Check used_by_features:**
-   - What other features depend on this?
-   - Will your change break them?
-3. **Check linked_workflows:**
-   - What user journeys use this?
-   - Will your change break the flow?
-
-**ESPECIALLY for INFRA.*:**
-- Infrastructure is high-impact
-- Many features depend on INFRA.*
-- ALWAYS check used_by_features before changing
-
-**If impact is unclear, ASK before changing.**
-
----
-
-## FEATURE LIFECYCLE
-
-Status: `planned` → `active` → `archived`
-Activity: `none` | `building` | `refactoring` | `fixing` | `extending`
-
-Follow this sequence:
-
-1. **CREATE** (before implementing)
-   ```
-   add_feature(id="AUTH.login", name="User Login", status="planned")
-   ```
-
-2. **START** (when beginning work)
-   ```
-   update_feature(id="AUTH.login", status="active", being_modified="building")
-   ```
-
-3. **TRACK** (during implementation)
-   ```
-   update_feature(id="AUTH.login",
-                  files=["src/auth/login.ts"],
-                  code_symbols=[{"name": "handleLogin", "location": "src/auth/login.ts", "valid": true}])
-   ```
-
-4. **COMMIT** (after tests pass)
-   ```
-   /feature-tree:commit  # bundles git + FT update
-   ```
-
-5. **COMPLETE**
-   ```
-   update_feature(id="AUTH.login", being_modified="none")
-   ```
-
-6. **LEAVE A NOTE** (if important context for next session)
-   ```
-   update_feature(id="AUTH.login", important_message="Rate limiter causes 500s if delay < 100ms")
-   ```
-
-**NEVER:**
-- Implement before creating the feature entry
-- Use regular git commit instead of /feature-tree:commit
-- Forget to update files/symbols after implementing
-
----
-
-## WHEN TO USE EACH TOOL
-
-### search_features(query)
-Use BEFORE any implementation work:
-- "Does this feature already exist?" → search before creating
-- "What feature owns this code?" → search by file/symbol name
-- "What shared utilities exist?" → search "INFRA"
-
-Searches across: id, name, description, technical_notes, files, code_symbols, commit_ids
-
-### search_workflows(query)
-Use for understanding user impact:
-- "What user journeys exist?" → search by domain
-- "If I break this, what flows fail?" → search to find affected workflows
-- "What workflows use AUTH.login?" → search by feature ID in depends_on
-
-Searches across: id, name, description, purpose, depends_on
-
-### get_feature(id) — Full Context
-Returns everything about a feature:
-- **uses_features**: What this feature depends on (forward)
-- **used_by_features**: What depends on this feature (reverse)
-- **linked_workflows**: Which workflows use this feature
-
-### get_workflow(id) — Workflow Readiness
-Returns workflow details plus:
-- **linked_features**: Features with their STATUS
-
-Use to check if workflow is implementable:
-- All features "done"? → workflow is ready
-- Some features "planned"? → workflow is blocked, implement features first
-
----
-
-## FEATURES
-
-Atomic, implementable units. NOT categories.
+Atomic, implementable code units. NOT categories.
 
 | Bad | Good |
 |-----|------|
 | "User Authentication" (category) | AUTH.login, AUTH.register, AUTH.password_reset |
 | "Database" (too broad) | INFRA.database, INFRA.migrations |
 
-### Key Fields
-| Field | Purpose | When to Use |
-|-------|---------|-------------|
-| `files` | Paths touched | After implementing |
-| `code_symbols` | Functions, classes, exports | After implementing |
-| `technical_notes` | Context code can't capture | "Uses Redis", "Rate limited to 100/min" |
-| `uses` | Dependencies on other features | When feature needs INFRA.* or other features |
-| `commit_ids` | Which commits implemented this | After /feature-tree:commit |
-| `confidence` | How certain (bootstrap) | HIGH=obvious, MEDIUM=inferred, LOW=uncertain |
-
-### Hierarchy
-Use `parent_id` for grouping: AUTH is parent, AUTH.login is child.
-But each child must still be atomic and independently implementable.
-
-## WORKFLOWS
-
-User-facing experiences that compose features.
-
-Format: `JOURNEY.flow` (e.g., USER_ONBOARDING.signup)
-
-### Key Fields
-| Field | Purpose |
-|-------|---------|
-| `purpose` | WHY this workflow exists (user goal) |
-| `description` | WHAT it does (steps involved) |
-| `depends_on` | Feature IDs this workflow needs |
-| `mermaid` | Visual flow diagram |
-
-### Why Both Trees?
-- Feature only → technically correct but UX is accidental
-- Workflow only → clear intent but implementation gaps
-- Both → change a feature, see which workflows break
-
-## INFRASTRUCTURE (INFRA.*)
-
-Shared utilities: INFRA.database, INFRA.logger, INFRA.rate_limiter, INFRA.config
-
-Features declare dependencies via `uses`:
+Shared infrastructure uses `INFRA.*` naming. Features declare dependencies via `uses`:
 ```
-add_feature(id="AUTH.login", uses=["INFRA.rate_limiter", "INFRA.database"])
+add_feature(id="AUTH.login", uses=["INFRA.database", "INFRA.rate_limiter"])
 ```
 
-**INFRA.* is high-impact** — always check `used_by_features` before changing.
+## Workflows
 
-## DELETE BEHAVIOR
+User journeys that compose features. Format: `JOURNEY.flow` (e.g., USER_ONBOARDING.signup)
 
-- Status = "planned" → **hard delete** (gone forever)
-- Status = "active" → **soft delete** → status becomes "archived" (recoverable)
+Workflows link to features via `depends_on`. Check workflow to see if all dependencies are `active` (ready) or some are `planned` (blocked).
 
-## STATUS LIFECYCLE
+## Field Definitions
 
-planned → active → archived
+**Features:**
+- `description` — Explain to a YC partner (what it does, user-facing)
+- `technical_notes` — Explain to a developer (how it works, gotchas)
 
-## ACTIVITY TRACKING
+**Workflows:**
+- `description` — Explain to a YC partner (what the journey is)
+- `purpose` — Technical goal (why it exists in the system)
+- `steps` — The actual flow in plain language, like a walkthrough
 
-`being_modified` tracks WHAT you're doing:
-- `none` — idle, not actively working
-- `building` — first-time implementation (new feature)
-- `refactoring` — changing implementation approach
-- `fixing` — addressing a bug
-- `extending` — adding capabilities to existing feature
+## How Updates Work
+
+**Updates OVERRIDE, not append.** To add a file to existing list:
+1. `get_feature(id)` → see current files
+2. `update_feature(id, files=[...all files including new one...])`
+
+To remove something:
+1. `get_feature(id)` → see current values
+2. `update_feature(id, files=[...remaining files...])` — full list without removed item
+
+## When to Update
+
+- **Search BEFORE implementing** (always)
+- **Create/update AFTER implementing** — when you know actual files, symbols, dependencies
+
+`being_modified` is for **handoff only** — when handing off mid-task (usually context window limit). Set it and document progress in handoff file so next Claude can continue.
+
+## Status
+
+Status tells you what you CAN DO with something:
+
+| Status | Meaning | Action |
+|--------|---------|--------|
+| `planned` | Designed, not in code | Don't depend on it yet. Implement first. |
+| `active` | Implemented, working | Safe to use and depend on |
+| `archived` | Deprecated/removed | Don't use. Update things depending on it. |
+
+**Workflow readiness:**
+- depends_on has `planned` → Blocked (implement features first)
+- depends_on has `archived` → Broken (remove from depends_on)
+- All depends_on `active` → Ready
+
+## Session
+
+If you see `FT_SESSION=N` in context, pass `s=N` to all Feature Tree tools to avoid file conflicts with concurrent projects.
 """
 
 def get_project_root(session_id: int | None = None) -> Path:
@@ -315,11 +175,9 @@ def resync_fts(s: int | None = None) -> str:
 
 @mcp.tool()
 def search_features(query: str, s: int | None = None) -> str:
-    """Hybrid search: semantic (conceptual) + FTS (keyword). Use before starting work.
+    """Semantic search for features. Use BEFORE implementing to find existing features and prevent duplicates.
 
-    Semantic search finds conceptually related features (e.g., "auth" finds "login", "signin").
-    FTS search finds exact keyword matches.
-    Returns: id, name, status, uses_count, confidence."""
+    Returns: id, name, status, parent_id, uses_count, confidence."""
     db = get_db(s)
     try:
         db_path = get_feat_tree_dir(s)
@@ -474,10 +332,9 @@ def update_feature(
 
 @mcp.tool()
 def get_feature(id: str, s: int | None = None) -> str:
-    """Get compact feature summary. Use BEFORE modifying to see impact.
+    """Get full feature context. Use AFTER search to see files, symbols, dependencies, and what depends on this.
 
-    Returns ~10 lines: status, being_modified, important_message, files, symbols, dependencies.
-    Check used_by before changing INFRA.* - many things may depend on it."""
+    Returns: status, files, symbols, uses, used_by, linked_workflows, important_message."""
     db = get_db(s)
     try:
         f = db.get_feature(id)
@@ -562,9 +419,9 @@ def delete_feature(id: str, s: int | None = None) -> str:
 
 @mcp.tool()
 def search_workflows(query: str, s: int | None = None) -> str:
-    """Hybrid search workflows: semantic + FTS. Find user journeys affected by changes.
+    """Semantic search for workflows. Start here for broad context — one workflow often has all context needed for a task.
 
-    Example: search_workflows("AUTH.login") finds workflows using that feature."""
+    Returns: id, name, status, parent_id, depends_on_count."""
     db = get_db(s)
     try:
         db_path = get_feat_tree_dir(s)
@@ -647,9 +504,9 @@ def add_workflow(
 
 @mcp.tool()
 def get_workflow(id: str, s: int | None = None) -> str:
-    """Get workflow details. Check linked_features status to see if workflow is implementable.
+    """Get full workflow context. Atomic documentation for a user journey.
 
-    Returns: All fields + linked_features with their status (done/planned/in-progress)."""
+    Returns: description, purpose, steps, depends_on features with their status (ready/blocked)."""
     db = get_db(s)
     try:
         workflow = db.get_workflow(id)

@@ -1,20 +1,8 @@
 #!/usr/bin/env python3
-"""Create session mapping, inject CONTEXT.md, and parse Restore State from handoff."""
+"""Session start hook: create session mapping, inject context, and workflow-first reminder."""
 import json
-import re
 import sys
 from pathlib import Path
-
-
-def parse_restore_state(handoff_content: str) -> dict | None:
-    """Extract Restore State JSON from handoff.md."""
-    match = re.search(r'## Restore State\s*```json\s*({.*?})\s*```', handoff_content, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
-    return None
 
 
 def main():
@@ -50,30 +38,44 @@ def main():
     (feat_tree_home / "current-project").write_text(cwd, encoding="utf-8")
 
     # Build context
-    context_parts = [f"FT_SESSION={session_id}"]
+    context_parts = []
+
+    # Workflow-first reminder
+    context_parts.append("""## Workflow-First Approach
+
+Start at the right zoom level:
+- **Workflows** = broad context (user journeys)
+- **Features** = focused context (atomic code units)  
+- **Code** = finest detail (files, symbols)
+
+Search before implementing. Update after implementing.""")
+
+    context_parts.append(f"FT_SESSION={session_id}")
 
     # Check for CONTEXT.md
     context_file = Path(cwd) / ".feat-tree" / "CONTEXT.md"
     if context_file.exists():
         try:
-            context_parts.append(context_file.read_text(encoding="utf-8").strip())
+            context_parts.append("# CONTEXT\n\n" + context_file.read_text(encoding="utf-8").strip())
         except Exception:
             pass
-    else:
-        context_parts.append("[No CONTEXT.md found] Run ft-mem:onboarding to create .feat-tree/CONTEXT.md")
 
-    # Check for Restore State in handoff.md
+    # Check for handoff.md
     handoff_file = Path(cwd) / ".feat-tree" / "memories" / "handoff.md"
     if handoff_file.exists():
         try:
             handoff_content = handoff_file.read_text(encoding="utf-8")
-            restore_state = parse_restore_state(handoff_content)
-            if restore_state:
-                feature_id = restore_state.get("feature", "unknown")
-                being_modified = restore_state.get("being_modified", "unknown")
-                context_parts.append(f"""⚠️ ACTIVE WORK FROM LAST SESSION:
-Feature: {feature_id} is being_modified={being_modified}
-Continue or run update_feature("{feature_id}", being_modified="none") to close.""")
+            context_parts.append("# Session Handoff\n" + handoff_content.strip())
+        except Exception:
+            pass
+
+    # List other memories
+    memories_dir = Path(cwd) / ".feat-tree" / "memories"
+    if memories_dir.exists():
+        try:
+            other_memories = [f.stem for f in memories_dir.glob("*.md") if f.stem != "handoff"]
+            if other_memories:
+                context_parts.append(f"Other memories: {', '.join(other_memories)}\nRead from .feat-tree/memories/<name>.md if needed.")
         except Exception:
             pass
 
