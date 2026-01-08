@@ -50,13 +50,13 @@ def test_workflow_to_text():
 def test_get_embedding_no_api_key():
     """Without API key, get_embedding returns None."""
     # Clear any existing API key
-    old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+    old_key = os.environ.pop("FT_EMBEDDING_API_KEY", None)
     try:
         result = embeddings.get_embedding("test text")
         assert result is None
     finally:
         if old_key:
-            os.environ["OPENROUTER_API_KEY"] = old_key
+            os.environ["FT_EMBEDDING_API_KEY"] = old_key
 
 
 def test_semantic_search_fallback():
@@ -65,13 +65,13 @@ def test_semantic_search_fallback():
         db_path = Path(tmpdir)
 
         # Clear any existing API key
-        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        old_key = os.environ.pop("FT_EMBEDDING_API_KEY", None)
         try:
             result = embeddings.search_features_semantic("test", db_path)
             assert result == []  # Empty because no embeddings available
         finally:
             if old_key:
-                os.environ["OPENROUTER_API_KEY"] = old_key
+                os.environ["FT_EMBEDDING_API_KEY"] = old_key
 
 
 def test_embed_feature_no_api_key():
@@ -80,13 +80,13 @@ def test_embed_feature_no_api_key():
         db_path = Path(tmpdir)
         feature = {"id": "TEST", "name": "Test", "status": "planned"}
 
-        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        old_key = os.environ.pop("FT_EMBEDDING_API_KEY", None)
         try:
             result = embeddings.embed_feature(feature, db_path)
             assert result is False
         finally:
             if old_key:
-                os.environ["OPENROUTER_API_KEY"] = old_key
+                os.environ["FT_EMBEDDING_API_KEY"] = old_key
 
 
 def test_get_embedding_config():
@@ -94,7 +94,7 @@ def test_get_embedding_config():
     # Clear env vars
     old_endpoint = os.environ.pop("FT_EMBEDDING_ENDPOINT", None)
     old_model = os.environ.pop("FT_EMBEDDING_MODEL", None)
-    old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+    old_key = os.environ.pop("FT_EMBEDDING_API_KEY", None)
 
     try:
         config = embeddings.get_embedding_config()
@@ -106,7 +106,7 @@ def test_get_embedding_config():
         # Test with custom values
         os.environ["FT_EMBEDDING_ENDPOINT"] = "https://custom.api/embeddings"
         os.environ["FT_EMBEDDING_MODEL"] = "custom-model"
-        os.environ["OPENROUTER_API_KEY"] = "test-key"
+        os.environ["FT_EMBEDDING_API_KEY"] = "test-key"
 
         config = embeddings.get_embedding_config()
 
@@ -120,4 +120,4 @@ def test_get_embedding_config():
         if old_model:
             os.environ["FT_EMBEDDING_MODEL"] = old_model
         if old_key:
-            os.environ["OPENROUTER_API_KEY"] = old_key
+            os.environ["FT_EMBEDDING_API_KEY"] = old_key

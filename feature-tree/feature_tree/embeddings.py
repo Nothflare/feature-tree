@@ -31,12 +31,12 @@ def get_embedding_config() -> dict:
     Environment variables:
     - FT_EMBEDDING_ENDPOINT: OpenRouter API endpoint (default: https://openrouter.ai/api/v1/embeddings)
     - FT_EMBEDDING_MODEL: Model to use (default: openai/text-embedding-3-small)
-    - OPENROUTER_API_KEY: API key for OpenRouter
+    - FT_EMBEDDING_API_KEY: API key for OpenRouter
     """
     return {
         "endpoint": os.environ.get("FT_EMBEDDING_ENDPOINT", "https://openrouter.ai/api/v1/embeddings"),
         "model": os.environ.get("FT_EMBEDDING_MODEL", "openai/text-embedding-3-small"),
-        "api_key": os.environ.get("OPENROUTER_API_KEY", ""),
+        "api_key": os.environ.get("FT_EMBEDDING_API_KEY", ""),
     }
 
 

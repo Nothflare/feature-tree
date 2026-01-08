@@ -76,28 +76,28 @@ v3.0 adds semantic search using embeddings. Without it, search falls back to FTS
 
 ### Setup
 
-Set the `OPENROUTER_API_KEY` environment variable:
+Set the `FT_EMBEDDING_API_KEY` environment variable:
 
 **Option 1: Claude Code settings** (recommended)
 ```json
 // ~/.claude/settings.json
 {
   "env": {
-    "OPENROUTER_API_KEY": "sk-or-..."
+    "FT_EMBEDDING_API_KEY": "sk-or-..."
   }
 }
 ```
 
 **Option 2: System environment**
 ```bash
-export OPENROUTER_API_KEY="sk-or-..."
+export FT_EMBEDDING_API_KEY="sk-or-..."
 ```
 
 ### Configuration
 
 | Env Variable | Default | Description |
 |--------------|---------|-------------|
-| `OPENROUTER_API_KEY` | (none) | OpenRouter API key. Without it, semantic search disabled. |
+| `FT_EMBEDDING_API_KEY` | (none) | OpenRouter API key. Without it, semantic search disabled. |
 | `FT_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model to use |
 | `FT_EMBEDDING_ENDPOINT` | `https://openrouter.ai/api/v1/embeddings` | API endpoint |
 

@@ -85,7 +85,8 @@ def render_feature(feature: dict, level: int) -> list[str]:
     if feature.get("code_symbols"):
         symbols = json.loads(feature["code_symbols"])
         if symbols:
-            lines.append(f"- **Symbols:** {', '.join(symbols)}")
+            symbol_names = [s.get("name", str(s)) if isinstance(s, dict) else str(s) for s in symbols]
+            lines.append(f"- **Symbols:** {', '.join(symbol_names)}")
 
     if feature.get("files"):
         files = json.loads(feature["files"])

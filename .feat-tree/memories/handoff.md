@@ -22,7 +22,7 @@ This session:
 
 | Variable | Required | Default |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | For semantic search | (none) |
+| `FT_EMBEDDING_API_KEY` | For semantic search | (none) |
 | `FT_EMBEDDING_MODEL` | No | `openai/text-embedding-3-small` |
 | `FT_EMBEDDING_ENDPOINT` | No | `https://openrouter.ai/api/v1/embeddings` |
 
