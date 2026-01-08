@@ -38,6 +38,15 @@ Shared infrastructure uses `INFRA.*` naming. Features declare dependencies via `
 add_feature(id="AUTH.login", uses=["INFRA.database", "INFRA.rate_limiter"])
 ```
 
+## ID Convention
+
+Use `CATEGORY.name` format:
+- Features: `AUTH.login`, `AUTH.register`, `CART.checkout`
+- Infrastructure: `INFRA.database`, `INFRA.logger`
+- Workflows: `USER_ONBOARDING.signup`, `CHECKOUT.payment_flow`
+
+Use `parent_id` for hierarchy: `AUTH` is parent, `AUTH.login` is child.
+
 ## Workflows
 
 User journeys that compose features. Format: `JOURNEY.flow` (e.g., USER_ONBOARDING.signup)
