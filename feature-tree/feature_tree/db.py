@@ -203,12 +203,25 @@ class FeatureDB:
             )
 
     def _json_to_text(self, json_str: str | None) -> str | None:
-        """Convert JSON array to space-separated text for FTS indexing."""
+        """Convert JSON array to space-separated text for FTS indexing.
+
+        Handles both string arrays (files, commit_ids) and dict arrays (code_symbols).
+        """
         if not json_str:
             return None
         try:
             items = json.loads(json_str)
-            return " ".join(items) if items else None
+            if not items:
+                return None
+            # Handle both string arrays and dict arrays (code_symbols)
+            text_parts = []
+            for item in items:
+                if isinstance(item, dict):
+                    # code_symbols format: {name, location, valid}
+                    text_parts.append(item.get("name", ""))
+                else:
+                    text_parts.append(str(item))
+            return " ".join(filter(None, text_parts))
         except (json.JSONDecodeError, TypeError):
             return json_str
 

@@ -324,8 +324,12 @@ def search_features(query: str, s: int | None = None) -> str:
     try:
         db_path = get_feat_tree_dir(s)
 
-        # Semantic search first (top 10)
-        semantic_ids = embeddings.search_features_semantic(query, db_path, n_results=10)
+        # Semantic search first (top 10) - wrapped in try/except for robustness
+        try:
+            semantic_ids = embeddings.search_features_semantic(query, db_path, n_results=10)
+        except Exception:
+            # ChromaDB or API failure - fallback to FTS only
+            semantic_ids = []
 
         # FTS search (top 10)
         fts_results = db.search_features(query)
@@ -565,8 +569,12 @@ def search_workflows(query: str, s: int | None = None) -> str:
     try:
         db_path = get_feat_tree_dir(s)
 
-        # Semantic search first
-        semantic_ids = embeddings.search_workflows_semantic(query, db_path, n_results=10)
+        # Semantic search first - wrapped in try/except for robustness
+        try:
+            semantic_ids = embeddings.search_workflows_semantic(query, db_path, n_results=10)
+        except Exception:
+            # ChromaDB or API failure - fallback to FTS only
+            semantic_ids = []
 
         # FTS search
         fts_results = db.search_workflows(query)
