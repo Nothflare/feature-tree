@@ -70,6 +70,42 @@ Call `get_feature("INFRA.rate_limiter")` → see `used_by_features` (everything 
 # Restart Claude Code
 ```
 
+## Semantic Search (Optional)
+
+v3.0 adds semantic search using embeddings. Without it, search falls back to FTS (keyword matching).
+
+### Setup
+
+Set the `OPENROUTER_API_KEY` environment variable:
+
+**Option 1: Claude Code settings** (recommended)
+```json
+// ~/.claude/settings.json
+{
+  "env": {
+    "OPENROUTER_API_KEY": "sk-or-..."
+  }
+}
+```
+
+**Option 2: System environment**
+```bash
+export OPENROUTER_API_KEY="sk-or-..."
+```
+
+### Configuration
+
+| Env Variable | Default | Description |
+|--------------|---------|-------------|
+| `OPENROUTER_API_KEY` | (none) | OpenRouter API key. Without it, semantic search disabled. |
+| `FT_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model to use |
+| `FT_EMBEDDING_ENDPOINT` | `https://openrouter.ai/api/v1/embeddings` | API endpoint |
+
+### How It Works
+
+- **With API key**: Hybrid search (semantic + FTS). "auth" finds "login", "signin", "credentials".
+- **Without API key**: FTS only (keyword matching). Still works, just less semantic.
+
 ## Session Support
 
 When multiple Claude sessions work on different projects simultaneously:
@@ -126,8 +162,9 @@ This prevents cross-project data corruption.
 | `/feature-tree:brainstorm` | Design new features through structured discovery |
 | `/feature-tree:executing-plans` | Execute implementation plans with commits |
 | `/feature-tree:commit` | Commit with automatic feature tree update |
+| `/feature-tree:understand` | Build global codebase awareness via workflows and features |
 | `/ft-mem:onboarding` | First-time project setup |
-| `/ft-mem:handoff` | Save context before /clear |
+| `/ft-mem:handoff` | Save context before /clear (includes Restore State for v3) |
 
 ## Usage Protocol
 
@@ -151,13 +188,16 @@ search_workflows("login")
 # Create feature BEFORE coding
 add_feature(id="AUTH.login", name="User Login", status="planned")
 
-# Start work
-update_feature(id="AUTH.login", status="in-progress")
+# Start work (v3: status + being_modified)
+update_feature(id="AUTH.login", status="active", being_modified="building")
 
 # Track as you go
 update_feature(id="AUTH.login",
     files=["src/auth/login.ts"],
-    code_symbols=["handleLogin", "LoginRequest"])
+    code_symbols=[{"name": "handleLogin", "location": "src/auth/login.ts", "valid": True}])
+
+# Leave notes for future sessions
+update_feature(id="AUTH.login", important_message="Rate limiter needs 100ms delay")
 ```
 
 ### After Implementation
@@ -166,8 +206,37 @@ update_feature(id="AUTH.login",
 # Use the commit skill (bundles git + FT update)
 /feature-tree:commit
 
-# Or manually
-update_feature(id="AUTH.login", status="done", commit_ids=["abc123"])
+# Mark work complete
+update_feature(id="AUTH.login", being_modified="none", commit_ids=["abc123"])
+```
+
+## v3 State Model
+
+### Status (lifecycle)
+| Status | Meaning |
+|--------|---------|
+| `planned` | Designed, not built |
+| `active` | Implemented, in use |
+| `archived` | Removed (soft-delete) |
+
+### being_modified (activity)
+| Value | Meaning |
+|-------|---------|
+| `none` | Idle, no active work |
+| `building` | First-time implementation |
+| `refactoring` | Changing approach |
+| `fixing` | Addressing a bug |
+| `extending` | Adding capabilities |
+
+### JIT Reminders
+
+When you Read/Edit a file tracked in Feature Tree, you'll see context:
+
+```
+📍 AUTH.login [active] [refactoring]
+⚠️ Rate limiter needs 100ms delay
+Uses: INFRA.session, INFRA.rate_limiter
+Used by (3): AUTH.logout, AUTH.session, AUTH.password_reset
 ```
 
 ## Storage
@@ -175,6 +244,7 @@ update_feature(id="AUTH.login", status="done", commit_ids=["abc123"])
 ```
 .feat-tree/
 ├── features.db      # SQLite + FTS5
+├── chroma/          # ChromaDB vector store (semantic search)
 ├── FEATURES.md      # Auto-generated
 ├── WORKFLOWS.md     # Auto-generated
 ├── CONTEXT.md       # Product context

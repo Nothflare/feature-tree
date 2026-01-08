@@ -11,7 +11,10 @@
   "mcpServers": {
     "feature-tree": {
       "command": "uv",
-      "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "feature-tree"]
+      "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "feature-tree"],
+      "env": {
+        "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}"
+      }
     }
   }
 }
