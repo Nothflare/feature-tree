@@ -168,10 +168,32 @@ Output the plan. Workflows first, always.
 ---
 
 ## Implementation Order
-1. [ ] INFRA.xxx — [why first]
-2. [ ] FEATURE.xxx
-3. [ ] FEATURE.xxx
-4. [ ] WORKFLOW.xxx — [integration test]
+
+Group by commit. Distribute effort evenly — big features get own commit, small ones batch together.
+
+### Commit 1: [Group Name]
+- [ ] INFRA.database — setup connection pool
+- [ ] INFRA.config — env-based config
+(small, related → batch together)
+
+### Commit 2: [Big Feature Name]
+- [ ] AUTH.login — validate credentials, create session, handle errors
+(complex feature → own commit)
+
+### Commit 3: [Group Name]
+- [ ] AUTH.logout — destroy session
+- [ ] AUTH.refresh — refresh token
+(small, related → batch together)
+
+### Commit 4: [Integration]
+- [ ] USER.login_flow — end-to-end test
+(workflow integration test)
+
+**Grouping rules:**
+- Big/complex feature → own commit
+- Small/simple features → batch with related ones
+- Each commit should be test-able with REAL testing
+- If a group feels too big to test confidently → split it
 
 ## Decisions
 - [Decision]: [Why we chose this over alternatives]
@@ -183,7 +205,8 @@ Output the plan. Workflows first, always.
 - **Workflows FIRST** — Always
 - **Self-contained detail** — Description + Technical Notes + Steps should be complete enough that Claude can implement without further questions
 - **Status markers** — planned / in-progress / done
-- **Implementation order** — Dependencies first, then features, then workflow integration
+- **Commit grouping** — Group by effort: big features alone, small features batched
+- **Each commit must be testable** — If you can't test it REAL, the group is wrong
 
 ---
 
