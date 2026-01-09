@@ -63,6 +63,17 @@ class FeatureDB:
             CREATE VIRTUAL TABLE IF NOT EXISTS workflows_fts USING fts5(
                 id, name, description, purpose, depends_on, steps
             );
+
+            -- Embedding job queue (persistent, survives restarts)
+            CREATE TABLE IF NOT EXISTS embedding_queue (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type     TEXT NOT NULL,  -- 'feature' or 'workflow'
+                item_id       TEXT NOT NULL,
+                attempt       INTEGER DEFAULT 1,
+                next_retry_at TEXT,  -- ISO timestamp, NULL = ready now
+                created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(item_type, item_id)  -- Only one job per item
+            );
         """)
         self.conn.commit()
         
@@ -573,3 +584,57 @@ class FeatureDB:
             self._sync_workflow_fts(id)
             self.conn.commit()
             return {"ok": True, "type": "soft"}
+
+    # ==================== EMBEDDING QUEUE ====================
+
+    def queue_embed_job(self, item_type: str, item_id: str) -> bool:
+        """Add embedding job to queue. Returns True if added, False if already queued."""
+        try:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO embedding_queue (item_type, item_id) VALUES (?, ?)",
+                (item_type, item_id)
+            )
+            self.conn.commit()
+            return self.conn.total_changes > 0
+        except Exception:
+            return False
+
+    def get_next_embed_job(self) -> Optional[dict]:
+        """Get next ready job (no next_retry_at or past due). Returns None if queue empty."""
+        now = datetime.now(UTC).isoformat()
+        row = self.conn.execute(
+            """SELECT id, item_type, item_id, attempt FROM embedding_queue
+               WHERE next_retry_at IS NULL OR next_retry_at <= ?
+               ORDER BY id LIMIT 1""",
+            (now,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def update_embed_job_retry(self, item_type: str, item_id: str, attempt: int, next_retry_at: str):
+        """Update job for retry with next attempt time."""
+        self.conn.execute(
+            "UPDATE embedding_queue SET attempt = ?, next_retry_at = ? WHERE item_type = ? AND item_id = ?",
+            (attempt, next_retry_at, item_type, item_id)
+        )
+        self.conn.commit()
+
+    def delete_embed_job(self, item_type: str, item_id: str):
+        """Remove completed or failed job from queue."""
+        self.conn.execute(
+            "DELETE FROM embedding_queue WHERE item_type = ? AND item_id = ?",
+            (item_type, item_id)
+        )
+        self.conn.commit()
+
+    def get_embed_queue_count(self) -> int:
+        """Get number of pending jobs in queue."""
+        row = self.conn.execute("SELECT COUNT(*) FROM embedding_queue").fetchone()
+        return row[0] if row else 0
+
+    def reset_embed_queue_for_startup(self) -> int:
+        """Reset all jobs for fresh retry on startup. Returns count of jobs reset."""
+        result = self.conn.execute(
+            "UPDATE embedding_queue SET attempt = 1, next_retry_at = NULL"
+        )
+        self.conn.commit()
+        return result.rowcount

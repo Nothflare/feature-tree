@@ -3,72 +3,161 @@
 
 import json
 import os
+import time
 import threading
-import queue
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:
+    from feature_tree.db import FeatureDB
 
 # Lazy imports for optional dependencies
 _chroma_client = None
 _chroma_available = None
 
-# Background embedding queue
-_embed_queue: queue.Queue = None
+# Background embedding worker
 _embed_worker: threading.Thread = None
 _embed_worker_stop = threading.Event()
+_db_path_for_worker: Path = None
+
+# Retry configuration
+MAX_RETRY_ATTEMPTS = 3
+RETRY_BACKOFF_BASE = 2  # seconds, doubles each attempt: 2, 4, 8
+POLL_INTERVAL = 2.0  # seconds between queue checks
+
+
+def _get_worker_db():
+    """Get a fresh DB connection for the worker thread."""
+    from feature_tree.db import FeatureDB
+    if _db_path_for_worker is None:
+        return None
+    db_file = _db_path_for_worker / "features.db"
+    return FeatureDB(str(db_file))
 
 
 def _embedding_worker(status_callback: Callable[[str, str, dict], None]):
-    """Background worker that processes embedding jobs.
+    """Background worker that processes embedding jobs from DB queue with auto-retry.
 
-    status_callback(item_type, item_id, status_dict) is called after each job.
-    status_dict: {"status": "success"|"failed", "at": timestamp, "error"?: str}
+    Polls DB for ready jobs, processes them, handles retries with backoff.
+    Survives restarts - pending jobs are persisted in SQLite.
     """
     while not _embed_worker_stop.is_set():
-        try:
-            job = _embed_queue.get(timeout=1.0)
-        except queue.Empty:
+        db = _get_worker_db()
+        if db is None:
+            time.sleep(POLL_INTERVAL)
             continue
 
-        if job is None:  # Poison pill
-            break
-
-        item_type, item_data, db_path = job
-        item_id = item_data.get("id", "unknown")
-
         try:
+            job = db.get_next_embed_job()
+            if job is None:
+                db.close()
+                time.sleep(POLL_INTERVAL)
+                continue
+
+            item_type = job["item_type"]
+            item_id = job["item_id"]
+            attempt = job["attempt"]
+
+            # Fetch actual item data
             if item_type == "feature":
-                success = embed_feature(item_data, db_path)
+                item_data = db.get_feature(item_id)
             else:
-                success = embed_workflow(item_data, db_path)
+                item_data = db.get_workflow(item_id)
 
-            if success:
-                status = {"status": "success", "at": datetime.now(UTC).isoformat()}
-            else:
-                status = {"status": "failed", "error": "embedding_unavailable", "at": datetime.now(UTC).isoformat()}
+            if item_data is None:
+                # Item was deleted, remove from queue
+                db.delete_embed_job(item_type, item_id)
+                db.close()
+                continue
 
-            status_callback(item_type, item_id, status)
-        except Exception as e:
-            status = {"status": "failed", "error": str(e), "at": datetime.now(UTC).isoformat()}
-            status_callback(item_type, item_id, status)
+            # Try embedding
+            try:
+                if item_type == "feature":
+                    success = embed_feature(item_data, _db_path_for_worker)
+                else:
+                    success = embed_workflow(item_data, _db_path_for_worker)
+
+                if success:
+                    # Success - remove from queue, update status
+                    db.delete_embed_job(item_type, item_id)
+                    status = {"status": "success", "at": datetime.now(UTC).isoformat()}
+                    status_callback(item_type, item_id, status)
+                else:
+                    # Failed - retry or give up
+                    _handle_failure(db, item_type, item_id, attempt, "embedding_unavailable", status_callback)
+
+            except Exception as e:
+                _handle_failure(db, item_type, item_id, attempt, str(e), status_callback)
+
+        except Exception:
+            pass  # DB error, will retry next poll
         finally:
-            _embed_queue.task_done()
+            try:
+                db.close()
+            except Exception:
+                pass
+
+        # Small sleep to prevent tight loop
+        time.sleep(0.1)
 
 
-def start_embed_worker(status_callback: Callable[[str, str, dict], None]):
+def _handle_failure(db, item_type: str, item_id: str, attempt: int, error: str,
+                    status_callback: Callable[[str, str, dict], None]):
+    """Handle embedding failure - retry with backoff or wait for restart."""
+    if attempt < MAX_RETRY_ATTEMPTS:
+        backoff = RETRY_BACKOFF_BASE * (2 ** (attempt - 1))
+        next_retry = (datetime.now(UTC) + timedelta(seconds=backoff)).isoformat()
+        db.update_embed_job_retry(item_type, item_id, attempt + 1, next_retry)
+        status = {
+            "status": "retrying",
+            "attempt": attempt + 1,
+            "error": error,
+            "next_retry_in": backoff,
+            "at": datetime.now(UTC).isoformat()
+        }
+        status_callback(item_type, item_id, status)
+    else:
+        # Max retries exceeded - keep in queue for next startup (likely network issue)
+        # Set next_retry_at to far future so it won't be picked up this session
+        # On next startup, reset_stale_jobs() will clear this
+        far_future = (datetime.now(UTC) + timedelta(days=365)).isoformat()
+        db.update_embed_job_retry(item_type, item_id, attempt, far_future)
+        status = {
+            "status": "failed_will_retry",
+            "error": error,
+            "attempts": attempt,
+            "message": "will retry on next startup",
+            "at": datetime.now(UTC).isoformat()
+        }
+        status_callback(item_type, item_id, status)
+
+
+def start_embed_worker(db_path: Path, status_callback: Callable[[str, str, dict], None]):
     """Start the background embedding worker thread.
 
+    db_path: Path to .feat-tree directory containing features.db
     status_callback(item_type, item_id, status_dict) is called when each job completes.
     """
-    global _embed_queue, _embed_worker, _embed_worker_stop
+    global _embed_worker, _embed_worker_stop, _db_path_for_worker
 
     if _embed_worker is not None and _embed_worker.is_alive():
         return  # Already running
 
-    _embed_queue = queue.Queue()
+    _db_path_for_worker = db_path
+
+    # Reset stale jobs from previous session for fresh retry
+    db = _get_worker_db()
+    if db:
+        try:
+            db.reset_embed_queue_for_startup()
+        except Exception:
+            pass
+        finally:
+            db.close()
+
     _embed_worker_stop.clear()
     _embed_worker = threading.Thread(
         target=_embedding_worker,
@@ -87,42 +176,32 @@ def stop_embed_worker():
         return
 
     _embed_worker_stop.set()
-    if _embed_queue is not None:
-        _embed_queue.put(None)  # Poison pill
     _embed_worker.join(timeout=5.0)
     _embed_worker = None
 
 
-def queue_embed_feature(feature: dict, db_path: Path) -> bool:
+def queue_embed_feature(db, feature_id: str) -> bool:
     """Queue a feature for background embedding.
 
-    Returns True if queued, False if worker not running or no API key.
+    Returns True if queued, False if no API key configured.
     """
     config = get_embedding_config()
     if not config.get("api_key"):
         return False
 
-    if _embed_queue is None:
-        return False
-
-    _embed_queue.put(("feature", feature, db_path))
-    return True
+    return db.queue_embed_job("feature", feature_id)
 
 
-def queue_embed_workflow(workflow: dict, db_path: Path) -> bool:
+def queue_embed_workflow(db, workflow_id: str) -> bool:
     """Queue a workflow for background embedding.
 
-    Returns True if queued, False if worker not running or no API key.
+    Returns True if queued, False if no API key configured.
     """
     config = get_embedding_config()
     if not config.get("api_key"):
         return False
 
-    if _embed_queue is None:
-        return False
-
-    _embed_queue.put(("workflow", workflow, db_path))
-    return True
+    return db.queue_embed_job("workflow", workflow_id)
 
 
 def _check_chroma_available() -> bool:

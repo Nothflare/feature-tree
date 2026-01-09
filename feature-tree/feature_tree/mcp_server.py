@@ -103,9 +103,7 @@ If you see `FT_SESSION=N` in context, pass `s=N` to all Feature Tree tools to av
 
 def _embedding_status_callback(item_type: str, item_id: str, status: dict):
     """Callback from background embedding worker to update DB status."""
-    import json
-    # Use session_id=None since worker doesn't know session context
-    # This is fine - embeddings are stored per-project via db_path
+    # Worker has its own DB connection, this uses a fresh one for status updates
     db = get_db(None)
     try:
         status_json = json.dumps(status)
@@ -119,8 +117,16 @@ def _embedding_status_callback(item_type: str, item_id: str, status: dict):
         db.close()
 
 
-# Start embedding worker on module load
-embeddings.start_embed_worker(_embedding_status_callback)
+_embed_worker_started = False
+
+
+def _ensure_embed_worker(session_id: int | None = None):
+    """Start embedding worker if not already running."""
+    global _embed_worker_started
+    if not _embed_worker_started:
+        db_path = get_feat_tree_dir(session_id)
+        embeddings.start_embed_worker(db_path, _embedding_status_callback)
+        _embed_worker_started = True
 
 
 def get_project_root(session_id: int | None = None) -> Path:
@@ -290,9 +296,9 @@ def add_feature(
         )
         regenerate_markdown(s)
 
-        # Queue for background embedding (non-blocking)
-        db_path = get_feat_tree_dir(s)
-        if embeddings.queue_embed_feature(feature, db_path):
+        # Queue for background embedding (non-blocking, persistent)
+        _ensure_embed_worker(s)
+        if embeddings.queue_embed_feature(db, id):
             db.update_feature(id, embedding_status=json.dumps({"status": "pending"}))
 
         result = {"ok": True}
@@ -355,8 +361,8 @@ def update_feature(
         if not fields:
             feature = db.get_feature(id)
             if feature:
-                db_path = get_feat_tree_dir(s)
-                if embeddings.queue_embed_feature(feature, db_path):
+                _ensure_embed_worker(s)
+                if embeddings.queue_embed_feature(db, id):
                     db.update_feature(id, embedding_status=json.dumps({"status": "pending"}))
                     return '{"ok":true,"message":"embedding queued"}'
             return '{"ok":true}'
@@ -367,8 +373,8 @@ def update_feature(
         # Re-embed if any searchable text changed
         text_fields = {"name", "description", "technical_notes", "files", "code_symbols", "uses"}
         if updated and fields.keys() & text_fields:
-            db_path = get_feat_tree_dir(s)
-            if embeddings.queue_embed_feature(updated, db_path):
+            _ensure_embed_worker(s)
+            if embeddings.queue_embed_feature(db, id):
                 db.update_feature(id, embedding_status=json.dumps({"status": "pending"}))
 
         return '{"ok":true}'
@@ -441,6 +447,30 @@ def get_feature(id: str, s: int | None = None) -> str:
             lines.append(f"Desc: {f['description'][:100]}")
         if f.get("technical_notes"):
             lines.append(f"Tech: {f['technical_notes'][:100]}")
+
+        lines.append("")
+
+        # Embedding status
+        embed_status = f.get("embedding_status")
+        if embed_status:
+            try:
+                es = json.loads(embed_status)
+                if es.get("status") == "success":
+                    lines.append("Embedding: ✓")
+                elif es.get("status") == "pending":
+                    lines.append("Embedding: ⏳ pending")
+                elif es.get("status") == "retrying":
+                    lines.append(f"Embedding: ⏳ retrying (attempt {es.get('attempt', '?')})")
+                elif es.get("status") == "failed_will_retry":
+                    lines.append("Embedding: ⏸ will retry on restart")
+                else:
+                    attempts = es.get("attempts", "")
+                    attempts_str = f" after {attempts} attempts" if attempts else ""
+                    lines.append(f"Embedding: ✗ ({es.get('error', 'failed')}{attempts_str})")
+            except json.JSONDecodeError:
+                lines.append("Embedding: ?")
+        else:
+            lines.append("Embedding: not indexed")
 
         return "\n".join(lines)
     finally:
@@ -546,12 +576,10 @@ def add_workflow(
         )
         regenerate_markdown(s)
 
-        # Queue for background embedding (non-blocking)
-        workflow = db.get_workflow(id)
-        if workflow:
-            db_path = get_feat_tree_dir(s)
-            if embeddings.queue_embed_workflow(workflow, db_path):
-                db.update_workflow(id, embedding_status=json.dumps({"status": "pending"}))
+        # Queue for background embedding (non-blocking, persistent)
+        _ensure_embed_worker(s)
+        if embeddings.queue_embed_workflow(db, id):
+            db.update_workflow(id, embedding_status=json.dumps({"status": "pending"}))
 
         result = {"ok": True}
         if warnings:
@@ -629,8 +657,14 @@ def get_workflow(id: str, s: int | None = None) -> str:
                     lines.append("Embedding: ✓")
                 elif es.get("status") == "pending":
                     lines.append("Embedding: ⏳ pending")
+                elif es.get("status") == "retrying":
+                    lines.append(f"Embedding: ⏳ retrying (attempt {es.get('attempt', '?')})")
+                elif es.get("status") == "failed_will_retry":
+                    lines.append("Embedding: ⏸ will retry on restart")
                 else:
-                    lines.append(f"Embedding: ✗ ({es.get('error', 'failed')})")
+                    attempts = es.get("attempts", "")
+                    attempts_str = f" after {attempts} attempts" if attempts else ""
+                    lines.append(f"Embedding: ✗ ({es.get('error', 'failed')}{attempts_str})")
             except json.JSONDecodeError:
                 lines.append("Embedding: ?")
         else:
@@ -686,8 +720,8 @@ def update_workflow(
         if not fields:
             workflow = db.get_workflow(id)
             if workflow:
-                db_path = get_feat_tree_dir(s)
-                if embeddings.queue_embed_workflow(workflow, db_path):
+                _ensure_embed_worker(s)
+                if embeddings.queue_embed_workflow(db, id):
                     db.update_workflow(id, embedding_status=json.dumps({"status": "pending"}))
                     return '{"ok":true,"message":"embedding queued"}'
             return '{"ok":true}'
@@ -698,8 +732,8 @@ def update_workflow(
         # Re-embed if searchable text changed
         text_fields = {"name", "description", "purpose", "depends_on", "steps"}
         if updated and fields.keys() & text_fields:
-            db_path = get_feat_tree_dir(s)
-            if embeddings.queue_embed_workflow(updated, db_path):
+            _ensure_embed_worker(s)
+            if embeddings.queue_embed_workflow(db, id):
                 db.update_workflow(id, embedding_status=json.dumps({"status": "pending"}))
 
         return '{"ok":true}'
