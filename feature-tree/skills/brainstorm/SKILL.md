@@ -11,6 +11,29 @@ Turn ideas into fully formed plans through collaborative dialogue.
 
 ---
 
+## CRITICAL: How to Use This Skill
+
+**ONE QUESTION AT A TIME.**
+
+Do NOT dump all questions at once. That produces shallow, useless answers.
+
+For each question:
+1. Present the question
+2. ULTRATHINK — deeply consider it, write your thinking
+3. Ask user: "Does this seem right?" or "Is this the right read?"
+4. Wait for user response
+5. Only then move to next question
+
+**DO NOT MOVE TO NEXT PHASE UNLESS USER EXPLICITLY AGREES.**
+
+At the end of each phase, ask: "Phase N complete. Ready for Phase N+1?"
+
+Wait for "ok" or "yes" before continuing.
+
+This is collaborative dialogue, not a checklist dump.
+
+---
+
 ## Phase 1: Discovery
 
 Push yourself to think. Don't skip these.
