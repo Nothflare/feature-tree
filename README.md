@@ -11,6 +11,7 @@ AI agents are high-variance systems. They can reason, explore, and make decision
 - Duplicate instead of reusing
 - Break things they didn't know existed
 - Lose everything when sessions restart
+- Degrade as context window fills up
 
 Traditional solutions try to control agents with rigid rules. This doesn't work — you can't control a complex system with a simple one.
 
@@ -169,11 +170,59 @@ Only set when handing off mid-task:
 | Skill | Purpose |
 |-------|---------|
 | `/feature-tree:brainstorm` | Design through Discovery → Product → Design → Specification |
+| `/feature-tree:ralph-execute` | Autonomous overnight execution with subagents |
 | `/feature-tree:executing-plans` | Execute plans with commits between tasks |
 | `/feature-tree:commit` | Commit with feature tree update |
 | `/feature-tree:bootstrap` | Discover features from existing codebase |
 | `/ft-mem:handoff` | Save context before /clear |
 | `/ft-mem:brainstorm-sync` | Sync brainstorm discoveries to memory |
+
+## Autonomous Execution (Ralph)
+
+Sleep while your app gets built.
+
+### The Architecture
+
+Based on the Viable System Model:
+
+```
+System 5 (Policy)       = Design files — what to build
+System 4 (Intelligence) = Human — strategic decisions
+System 3 (Management)   = Main agent — orchestrates everything
+System 1 (Operations)   = Subagents — fresh context workers
+```
+
+**Key insight:** Main agent stays alive, subagents get fresh context each time. No context degradation.
+
+### The Loop
+
+```
+/ralph-execute
+    ↓
+Pre-flight check (verify ALL deps before human leaves)
+    ↓
+For each planned feature:
+    Implementer (opus) → builds, writes test spec
+    Tester (sonnet) → runs REAL tests
+    Reviewer (opus) → quality/security/design gate
+    ↓
+    Pass → feature active, next
+    Fail → retry (max 3), then log blocker
+    ↓
+Test workflows end-to-end
+    ↓
+Human wakes up to working app or clear blockers
+```
+
+### Subagents
+
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| `implementer` | opus | Implement features, update Feature Tree, write test specs |
+| `tester` | sonnet | Run REAL tests, report pass/fail (cheaper) |
+| `reviewer` | opus | Quality, security, design review |
+
+Feature Tree is the shared memory between agents. No custom state management needed.
 
 ## Storage
 
@@ -184,11 +233,17 @@ Only set when handing off mid-task:
 ├── FEATURES.md      # Auto-generated
 ├── WORKFLOWS.md     # Auto-generated
 ├── CONTEXT.md       # Product context
-└── memories/        # Cross-session context
-    ├── handoff.md
-    ├── user.md
-    ├── scope.md
-    └── decisions.md
+├── memories/        # Cross-session context
+│   ├── handoff.md
+│   ├── user.md
+│   ├── scope.md
+│   └── decisions.md
+└── ralph/           # Autonomous execution artifacts
+    ├── handoff/     # Implementer → Implementer continuation
+    ├── test-spec/   # What to test
+    ├── test-results/# Raw test output
+    ├── review/      # Review findings
+    └── blockers/    # Stuck after retries
 ```
 
 ## Requirements
