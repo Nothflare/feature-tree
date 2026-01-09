@@ -3,14 +3,126 @@
 
 import json
 import os
+import threading
+import queue
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
 import httpx
 
 # Lazy imports for optional dependencies
 _chroma_client = None
 _chroma_available = None
+
+# Background embedding queue
+_embed_queue: queue.Queue = None
+_embed_worker: threading.Thread = None
+_embed_worker_stop = threading.Event()
+
+
+def _embedding_worker(status_callback: Callable[[str, str, dict], None]):
+    """Background worker that processes embedding jobs.
+
+    status_callback(item_type, item_id, status_dict) is called after each job.
+    status_dict: {"status": "success"|"failed", "at": timestamp, "error"?: str}
+    """
+    while not _embed_worker_stop.is_set():
+        try:
+            job = _embed_queue.get(timeout=1.0)
+        except queue.Empty:
+            continue
+
+        if job is None:  # Poison pill
+            break
+
+        item_type, item_data, db_path = job
+        item_id = item_data.get("id", "unknown")
+
+        try:
+            if item_type == "feature":
+                success = embed_feature(item_data, db_path)
+            else:
+                success = embed_workflow(item_data, db_path)
+
+            if success:
+                status = {"status": "success", "at": datetime.now(UTC).isoformat()}
+            else:
+                status = {"status": "failed", "error": "embedding_unavailable", "at": datetime.now(UTC).isoformat()}
+
+            status_callback(item_type, item_id, status)
+        except Exception as e:
+            status = {"status": "failed", "error": str(e), "at": datetime.now(UTC).isoformat()}
+            status_callback(item_type, item_id, status)
+        finally:
+            _embed_queue.task_done()
+
+
+def start_embed_worker(status_callback: Callable[[str, str, dict], None]):
+    """Start the background embedding worker thread.
+
+    status_callback(item_type, item_id, status_dict) is called when each job completes.
+    """
+    global _embed_queue, _embed_worker, _embed_worker_stop
+
+    if _embed_worker is not None and _embed_worker.is_alive():
+        return  # Already running
+
+    _embed_queue = queue.Queue()
+    _embed_worker_stop.clear()
+    _embed_worker = threading.Thread(
+        target=_embedding_worker,
+        args=(status_callback,),
+        daemon=True,
+        name="EmbeddingWorker"
+    )
+    _embed_worker.start()
+
+
+def stop_embed_worker():
+    """Stop the background embedding worker thread."""
+    global _embed_worker
+
+    if _embed_worker is None:
+        return
+
+    _embed_worker_stop.set()
+    if _embed_queue is not None:
+        _embed_queue.put(None)  # Poison pill
+    _embed_worker.join(timeout=5.0)
+    _embed_worker = None
+
+
+def queue_embed_feature(feature: dict, db_path: Path) -> bool:
+    """Queue a feature for background embedding.
+
+    Returns True if queued, False if worker not running or no API key.
+    """
+    config = get_embedding_config()
+    if not config.get("api_key"):
+        return False
+
+    if _embed_queue is None:
+        return False
+
+    _embed_queue.put(("feature", feature, db_path))
+    return True
+
+
+def queue_embed_workflow(workflow: dict, db_path: Path) -> bool:
+    """Queue a workflow for background embedding.
+
+    Returns True if queued, False if worker not running or no API key.
+    """
+    config = get_embedding_config()
+    if not config.get("api_key"):
+        return False
+
+    if _embed_queue is None:
+        return False
+
+    _embed_queue.put(("workflow", workflow, db_path))
+    return True
 
 
 def _check_chroma_available() -> bool:

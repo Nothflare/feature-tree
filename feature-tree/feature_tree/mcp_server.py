@@ -101,6 +101,28 @@ Status tells you what you CAN DO with something:
 If you see `FT_SESSION=N` in context, pass `s=N` to all Feature Tree tools to avoid file conflicts with concurrent projects.
 """
 
+def _embedding_status_callback(item_type: str, item_id: str, status: dict):
+    """Callback from background embedding worker to update DB status."""
+    import json
+    # Use session_id=None since worker doesn't know session context
+    # This is fine - embeddings are stored per-project via db_path
+    db = get_db(None)
+    try:
+        status_json = json.dumps(status)
+        if item_type == "feature":
+            db.update_feature(item_id, embedding_status=status_json)
+        else:
+            db.update_workflow(item_id, embedding_status=status_json)
+    except Exception:
+        pass  # Best effort - don't crash worker
+    finally:
+        db.close()
+
+
+# Start embedding worker on module load
+embeddings.start_embed_worker(_embedding_status_callback)
+
+
 def get_project_root(session_id: int | None = None) -> Path:
     """Get project root from session ID or fallback chain."""
     feat_tree_home = Path.home() / ".feat-tree"
@@ -268,8 +290,10 @@ def add_feature(
         )
         regenerate_markdown(s)
 
-        # Embed for semantic search (async, non-blocking)
-        embeddings.embed_feature(feature, get_feat_tree_dir(s))
+        # Queue for background embedding (non-blocking)
+        db_path = get_feat_tree_dir(s)
+        if embeddings.queue_embed_feature(feature, db_path):
+            db.update_feature(id, embedding_status=json.dumps({"status": "pending"}))
 
         result = {"ok": True}
         if warnings:
@@ -299,7 +323,8 @@ def update_feature(
 
     When: AFTER implementing to record files/symbols. For handoff, set being_modified.
     To add to a list: get_feature first, then update with full list.
-    important_message: sticky note for next Claude session."""
+    important_message: sticky note for next Claude session.
+    Call with just id (no other params) to retry failed embedding."""
     db = get_db(s)
     try:
         fields = {}
@@ -326,13 +351,25 @@ def update_feature(
         if commit_ids is not None:
             fields["commit_ids"] = commit_ids
 
+        # No params = retry embedding
+        if not fields:
+            feature = db.get_feature(id)
+            if feature:
+                db_path = get_feat_tree_dir(s)
+                if embeddings.queue_embed_feature(feature, db_path):
+                    db.update_feature(id, embedding_status=json.dumps({"status": "pending"}))
+                    return '{"ok":true,"message":"embedding queued"}'
+            return '{"ok":true}'
+
         updated = db.update_feature(id, **fields)
         regenerate_markdown(s)
 
         # Re-embed if any searchable text changed
-        text_fields = {"name", "description", "technical_notes", "files", "code_symbols"}
+        text_fields = {"name", "description", "technical_notes", "files", "code_symbols", "uses"}
         if updated and fields.keys() & text_fields:
-            embeddings.embed_feature(updated, get_feat_tree_dir(s))
+            db_path = get_feat_tree_dir(s)
+            if embeddings.queue_embed_feature(updated, db_path):
+                db.update_feature(id, embedding_status=json.dumps({"status": "pending"}))
 
         return '{"ok":true}'
     finally:
@@ -482,6 +519,9 @@ def add_workflow(
     depends_on: list[str] | None = None,
     mermaid: str | None = None,
     confidence: str | None = None,
+    being_modified: str = "none",
+    important_message: str | None = None,
+    steps: list[str] | None = None,
     s: int | None = None
 ) -> str:
     """Create a user journey. Workflows compose features into experiences.
@@ -501,14 +541,17 @@ def add_workflow(
             id=id, name=name, parent_id=parent_id,
             description=description, purpose=purpose,
             depends_on=depends_on, mermaid=mermaid,
-            confidence=confidence
+            confidence=confidence, being_modified=being_modified,
+            important_message=important_message, steps=steps
         )
         regenerate_markdown(s)
 
-        # Embed for semantic search
+        # Queue for background embedding (non-blocking)
         workflow = db.get_workflow(id)
         if workflow:
-            embeddings.embed_workflow(workflow, get_feat_tree_dir(s))
+            db_path = get_feat_tree_dir(s)
+            if embeddings.queue_embed_workflow(workflow, db_path):
+                db.update_workflow(id, embedding_status=json.dumps({"status": "pending"}))
 
         result = {"ok": True}
         if warnings:
@@ -549,12 +592,16 @@ def update_workflow(
     description: str | None = None,
     purpose: str | None = None,
     confidence: str | None = None,
+    being_modified: str | None = None,
+    important_message: str | None = None,
+    steps: list[str] | None = None,
     s: int | None = None
 ) -> str:
     """Update a workflow. Updates OVERRIDE, not append.
 
     When: Refining flows, updating dependencies.
-    To add to depends_on: get_workflow first, then update with full list."""
+    To add to depends_on: get_workflow first, then update with full list.
+    Call with just id (no other params) to retry failed embedding."""
     db = get_db(s)
     try:
         fields = {}
@@ -570,14 +617,32 @@ def update_workflow(
             fields["purpose"] = purpose
         if confidence is not None:
             fields["confidence"] = confidence
+        if being_modified is not None:
+            fields["being_modified"] = being_modified
+        if important_message is not None:
+            fields["important_message"] = important_message
+        if steps is not None:
+            fields["steps"] = steps
+
+        # No params = retry embedding
+        if not fields:
+            workflow = db.get_workflow(id)
+            if workflow:
+                db_path = get_feat_tree_dir(s)
+                if embeddings.queue_embed_workflow(workflow, db_path):
+                    db.update_workflow(id, embedding_status=json.dumps({"status": "pending"}))
+                    return '{"ok":true,"message":"embedding queued"}'
+            return '{"ok":true}'
 
         updated = db.update_workflow(id, **fields)
         regenerate_markdown(s)
 
         # Re-embed if searchable text changed
-        text_fields = {"name", "description", "purpose", "depends_on"}
+        text_fields = {"name", "description", "purpose", "depends_on", "steps"}
         if updated and fields.keys() & text_fields:
-            embeddings.embed_workflow(updated, get_feat_tree_dir(s))
+            db_path = get_feat_tree_dir(s)
+            if embeddings.queue_embed_workflow(updated, db_path):
+                db.update_workflow(id, embedding_status=json.dumps({"status": "pending"}))
 
         return '{"ok":true}'
     finally:

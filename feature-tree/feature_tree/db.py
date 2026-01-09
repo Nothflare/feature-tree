@@ -50,13 +50,18 @@ class FeatureDB:
                 depends_on    TEXT,
                 mermaid       TEXT,
                 status        TEXT DEFAULT 'planned',
+                being_modified TEXT DEFAULT 'none',
                 confidence    TEXT,
+                important_message TEXT,
+                embedding_status TEXT,
+                archived_at   TEXT,
+                steps         TEXT,
                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE VIRTUAL TABLE IF NOT EXISTS workflows_fts USING fts5(
-                id, name, description, purpose, depends_on
+                id, name, description, purpose, depends_on, steps
             );
         """)
         self.conn.commit()
@@ -66,7 +71,13 @@ class FeatureDB:
         self._migrate_add_column("features", "being_modified", "TEXT", default="'none'")
         self._migrate_add_column("features", "important_message", "TEXT")
         self._migrate_add_column("features", "archived_at", "TEXT")
+        self._migrate_add_column("features", "embedding_status", "TEXT")
         self._migrate_add_column("workflows", "confidence", "TEXT")
+        self._migrate_add_column("workflows", "being_modified", "TEXT", default="'none'")
+        self._migrate_add_column("workflows", "important_message", "TEXT")
+        self._migrate_add_column("workflows", "embedding_status", "TEXT")
+        self._migrate_add_column("workflows", "archived_at", "TEXT")
+        self._migrate_add_column("workflows", "steps", "TEXT")
 
         # Migrate FTS tables
         self._migrate_fts_add_columns()
@@ -172,10 +183,10 @@ class FeatureDB:
             )
 
     def _migrate_workflow_fts_add_columns(self):
-        """Recreate workflow FTS table if it doesn't have depends_on column."""
+        """Recreate workflow FTS table if it doesn't have all required columns."""
         needs_rebuild = False
         try:
-            self.conn.execute("SELECT depends_on FROM workflows_fts LIMIT 0")
+            self.conn.execute("SELECT depends_on, steps FROM workflows_fts LIMIT 0")
         except Exception:
             needs_rebuild = True
 
@@ -183,7 +194,7 @@ class FeatureDB:
             self.conn.execute("DROP TABLE IF EXISTS workflows_fts")
             self.conn.execute("""
                 CREATE VIRTUAL TABLE workflows_fts USING fts5(
-                    id, name, description, purpose, depends_on
+                    id, name, description, purpose, depends_on, steps
                 )
             """)
             self._resync_all_workflow_fts()
@@ -193,13 +204,14 @@ class FeatureDB:
         """Re-sync all workflows to FTS index."""
         self.conn.execute("DELETE FROM workflows_fts")
         rows = self.conn.execute(
-            "SELECT id, name, description, purpose, depends_on FROM workflows"
+            "SELECT id, name, description, purpose, depends_on, steps FROM workflows"
         ).fetchall()
         for row in rows:
             depends_text = self._json_to_text(row[4])
+            steps_text = self._json_to_text(row[5])
             self.conn.execute(
-                "INSERT INTO workflows_fts (id, name, description, purpose, depends_on) VALUES (?, ?, ?, ?, ?)",
-                (row[0], row[1], row[2], row[3], depends_text)
+                "INSERT INTO workflows_fts (id, name, description, purpose, depends_on, steps) VALUES (?, ?, ?, ?, ?, ?)",
+                (row[0], row[1], row[2], row[3], depends_text, steps_text)
             )
 
     def _json_to_text(self, json_str: str | None) -> str | None:
@@ -408,14 +420,15 @@ class FeatureDB:
         self.conn.execute("DELETE FROM workflows_fts WHERE id = ?", (workflow_id,))
         if not delete_only:
             row = self.conn.execute(
-                "SELECT id, name, description, purpose, depends_on FROM workflows WHERE id = ?",
+                "SELECT id, name, description, purpose, depends_on, steps FROM workflows WHERE id = ?",
                 (workflow_id,)
             ).fetchone()
             if row:
                 depends_text = self._json_to_text(row["depends_on"])
+                steps_text = self._json_to_text(row["steps"])
                 self.conn.execute(
-                    "INSERT INTO workflows_fts (id, name, description, purpose, depends_on) VALUES (?, ?, ?, ?, ?)",
-                    (row["id"], row["name"], row["description"], row["purpose"], depends_text)
+                    "INSERT INTO workflows_fts (id, name, description, purpose, depends_on, steps) VALUES (?, ?, ?, ?, ?, ?)",
+                    (row["id"], row["name"], row["description"], row["purpose"], depends_text, steps_text)
                 )
 
     def add_workflow(
@@ -427,14 +440,20 @@ class FeatureDB:
         purpose: Optional[str] = None,
         depends_on: Optional[list[str]] = None,
         mermaid: Optional[str] = None,
-        confidence: Optional[str] = None
+        confidence: Optional[str] = None,
+        being_modified: str = "none",
+        important_message: Optional[str] = None,
+        steps: Optional[list[str]] = None
     ) -> dict:
         now = datetime.now(UTC).isoformat()
         depends_json = json.dumps(depends_on) if depends_on else None
+        steps_json = json.dumps(steps) if steps else None
         self.conn.execute(
-            """INSERT INTO workflows (id, parent_id, name, description, purpose, depends_on, mermaid, confidence, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (id, parent_id, name, description, purpose, depends_json, mermaid, confidence, now, now)
+            """INSERT INTO workflows (id, parent_id, name, description, purpose, depends_on, mermaid, confidence,
+               being_modified, important_message, steps, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, parent_id, name, description, purpose, depends_json, mermaid, confidence,
+             being_modified, important_message, steps_json, now, now)
         )
         self._sync_workflow_fts(id)
         self.conn.commit()
@@ -499,8 +518,9 @@ class FeatureDB:
             return self.get_workflow(id)
 
         # Convert lists to JSON
-        if "depends_on" in fields and isinstance(fields["depends_on"], list):
-            fields["depends_on"] = json.dumps(fields["depends_on"])
+        for key in ["depends_on", "steps"]:
+            if key in fields and isinstance(fields[key], list):
+                fields[key] = json.dumps(fields[key])
 
         fields["updated_at"] = datetime.now(UTC).isoformat()
 
@@ -544,11 +564,11 @@ class FeatureDB:
             self.hard_delete_workflow(id)
             return {"ok": True, "type": "hard"}
         else:
-            # Soft delete: set status to archived
+            # Soft delete: set status to archived with timestamp
             now = datetime.now(UTC).isoformat()
             self.conn.execute(
-                "UPDATE workflows SET status = 'archived', updated_at = ? WHERE id = ?",
-                (now, id)
+                "UPDATE workflows SET status = 'archived', archived_at = ?, updated_at = ? WHERE id = ?",
+                (now, now, id)
             )
             self._sync_workflow_fts(id)
             self.conn.commit()
