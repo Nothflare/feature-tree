@@ -230,6 +230,13 @@ def feature_to_text(feature: dict) -> str:
             else:
                 parts.append(str(sym))
 
+    # Add uses (dependencies) - searching "database" finds features using INFRA.database
+    uses = feature.get("uses")
+    if uses:
+        if isinstance(uses, str):
+            uses = json.loads(uses)
+        parts.extend(uses)
+
     return " ".join(filter(None, parts))
 
 
@@ -247,6 +254,13 @@ def workflow_to_text(workflow: dict) -> str:
         if isinstance(depends, str):
             depends = json.loads(depends)
         parts.extend(depends)
+
+    # Add steps - searching "verify conversation" finds workflows with that step
+    steps = workflow.get("steps")
+    if steps:
+        if isinstance(steps, str):
+            steps = json.loads(steps)
+        parts.extend(steps)
 
     return " ".join(filter(None, parts))
 

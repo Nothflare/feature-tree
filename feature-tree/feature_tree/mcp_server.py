@@ -569,16 +569,74 @@ def get_workflow(id: str, s: int | None = None) -> str:
     Returns: description, purpose, steps, linked_features with status."""
     db = get_db(s)
     try:
-        workflow = db.get_workflow(id)
-        if workflow:
-            # Add linked features
-            features = db.get_features_for_workflow(id)
-            workflow["linked_features"] = [
-                {"id": f["id"], "name": f["name"], "status": f["status"]}
-                for f in features
-            ]
-            return json.dumps(workflow, default=str)
-        return '{"ok":false,"error":"not found"}'
+        w = db.get_workflow(id)
+        if not w:
+            return '{"ok":false,"error":"not found"}'
+
+        # Build compact output like get_feature()
+        lines = [f"{w['id']} [{w.get('status', 'planned')}] [{w.get('being_modified', 'none')}]"]
+
+        if w.get("important_message"):
+            lines.append(f"⚠️ {w['important_message']}")
+
+        lines.append("")
+
+        # Description and purpose
+        if w.get("description"):
+            lines.append(f"Description: {w['description'][:150]}")
+        if w.get("purpose"):
+            lines.append(f"Purpose: {w['purpose'][:150]}")
+
+        # Steps
+        steps = json.loads(w.get("steps") or "[]")
+        if steps:
+            lines.append("")
+            lines.append("Steps:")
+            for i, step in enumerate(steps[:10], 1):
+                lines.append(f"  {i}. {step}")
+            if len(steps) > 10:
+                lines.append(f"  ... (+{len(steps) - 10} more)")
+
+        lines.append("")
+
+        # Depends on with status indicators
+        features = db.get_features_for_workflow(id)
+        depends_ids = json.loads(w.get("depends_on") or "[]")
+        if depends_ids:
+            lines.append(f"Depends on ({len(depends_ids)}):")
+            feature_map = {f["id"]: f for f in features}
+            for fid in depends_ids[:10]:
+                f = feature_map.get(fid)
+                if f:
+                    status = f.get("status", "planned")
+                    icon = "✓" if status == "active" else "○" if status == "planned" else "✗"
+                    lines.append(f"  {icon} {fid} [{status}]")
+                else:
+                    lines.append(f"  ? {fid} [not found]")
+            if len(depends_ids) > 10:
+                lines.append(f"  ... (+{len(depends_ids) - 10} more)")
+        else:
+            lines.append("Depends on: none")
+
+        lines.append("")
+
+        # Embedding status
+        embed_status = w.get("embedding_status")
+        if embed_status:
+            try:
+                es = json.loads(embed_status)
+                if es.get("status") == "success":
+                    lines.append("Embedding: ✓")
+                elif es.get("status") == "pending":
+                    lines.append("Embedding: ⏳ pending")
+                else:
+                    lines.append(f"Embedding: ✗ ({es.get('error', 'failed')})")
+            except json.JSONDecodeError:
+                lines.append("Embedding: ?")
+        else:
+            lines.append("Embedding: not indexed")
+
+        return "\n".join(lines)
     finally:
         db.close()
 

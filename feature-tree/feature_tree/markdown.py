@@ -130,6 +130,14 @@ def render_workflow(workflow: dict, level: int, db: FeatureDB) -> list[str]:
         if depends:
             lines.append(f"- **Depends on:** {', '.join(depends)}")
 
+    # Steps
+    if workflow.get("steps"):
+        steps = json.loads(workflow["steps"])
+        if steps:
+            lines.append("- **Steps:**")
+            for i, step in enumerate(steps, 1):
+                lines.append(f"  {i}. {step}")
+
     lines.append("")
 
     # Mermaid diagram
